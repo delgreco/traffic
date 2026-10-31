@@ -1,0 +1,22 @@
+# Credentials & Auth
+.htpasswd
+config/.htpasswd
+config/traffic.json
+
+# Generated static HTML reports & incremental state
+/output/
+/state/
+/data/
+
+# Raw Apache log files & archives
+*.log
+*.log.*
+*.gz
+
+# Perl / local build & temp artifacts
+/local/
+*.tmp.*
+*.bak
+*.swp
+*~
+.DS_Store
