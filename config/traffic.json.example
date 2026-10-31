@@ -1,0 +1,50 @@
+{
+  "state_file": "state/traffic_state.json",
+  "output_dir": "output",
+  "raw_retention_days": 30,
+  "max_recent_logs_per_vhost": 1000,
+  "default_vhost_from_filename": true,
+  "filename_vhost_regex": "^(.+?)(?:[-_.]ssl)?(?:[-_.]access)?\\.log",
+  "log_sources": [
+    {
+      "path": "/var/log/apache2/other_vhosts_access.log*",
+      "vhost": null
+    },
+    {
+      "path": "/var/log/apache2/access.log*",
+      "vhost": "behave.mindmined.com"
+    },
+    {
+      "path": "/var/log/apache2/collect-access.log*",
+      "vhost": "collect.mindmined.com"
+    },
+    {
+      "path": "/var/log/apache2/collect-ssl-access.log*",
+      "vhost": "collect.mindmined.com"
+    },
+    {
+      "path": "/var/log/apache2/cozmikast-access.log*",
+      "vhost": "cozmikast.mindmined.com"
+    },
+    {
+      "path": "/var/log/apache2/cozmikast-ssl-access.log*",
+      "vhost": "cozmikast.mindmined.com"
+    },
+    {
+      "path": "/var/log/apache2/villobotanicals-access.log*",
+      "vhost": "villobotanicals.com"
+    },
+    {
+      "path": "/var/log/apache2/villo-botanicals-dev-access.log*",
+      "vhost": "dev.villobotanicals.com"
+    },
+    {
+      "path": "/var/log/apache2/villobotanicals-dev-access.log*",
+      "vhost": "dev.villobotanicals.com"
+    },
+    {
+      "path": "/var/log/apache2/traffic-analytics-access.log*",
+      "vhost": "traffic.mindmined.com"
+    }
+  ]
+}
