@@ -352,7 +352,8 @@ sub _write_index_page {
 HTML
 
     my $file = "$self->{output_dir}/index.html";
-    open my $fh, '>:encoding(UTF-8)', $file or croak "Cannot write '$file': $!";
+    utf8::encode($html) if utf8::is_utf8($html);
+    open my $fh, '>:raw', $file or croak "Cannot write '$file': $!";
     print {$fh} $html;
     close $fh;
     return $file;
@@ -668,7 +669,8 @@ sub _write_vhost_chart_page {
 HTML
 
     my $file = "$self->{output_dir}/vhosts/$slug.html";
-    open my $fh, '>:encoding(UTF-8)', $file or croak "Cannot write '$file': $!";
+    utf8::encode($html) if utf8::is_utf8($html);
+    open my $fh, '>:raw', $file or croak "Cannot write '$file': $!";
     print {$fh} $html;
     close $fh;
     return $file;
@@ -1009,7 +1011,8 @@ sub _write_vhost_details_page {
 HTML
 
     my $file = "$self->{output_dir}/vhosts/$slug-details.html";
-    open my $fh, '>:encoding(UTF-8)', $file or croak "Cannot write '$file': $!";
+    utf8::encode($html) if utf8::is_utf8($html);
+    open my $fh, '>:raw', $file or croak "Cannot write '$file': $!";
     print {$fh} $html;
     close $fh;
     return $file;

@@ -24,7 +24,7 @@ sub load_config {
             log_sources => [],
         };
     }
-    open my $fh, '<:encoding(UTF-8)', $config_path
+    open my $fh, '<:raw', $config_path
         or croak "Cannot open config file '$config_path': $!";
     local $/;
     my $raw = <$fh>;
@@ -69,7 +69,7 @@ sub load_state {
     my ($self) = @_;
     my $file = $self->{state_file};
     if (-f $file) {
-        open my $fh, '<:encoding(UTF-8)', $file
+        open my $fh, '<:raw', $file
             or croak "Cannot read state file '$file': $!";
         local $/;
         my $raw = <$fh>;
