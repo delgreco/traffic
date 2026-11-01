@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-01 - Preserve View Mode on Virtual Host Selection
+
+- Updated `lib/ApacheLog/ReportBuilder.pm` so the Virtual Host `<select>` navigation options preserve the active View Mode (Charts Overview vs. Detailed Traffic & Logs) when switching between virtual hosts.
+- Updated `assets/report.js` client-side navigation handler to maintain the active view mode across virtual host changes.
+- Added automated test assertions in `t/02-static-builder.t` verifying view mode retention.
+
 ## 2026-10-31 - Initial Static HTML Apache Traffic Report Generator
 
 - Built the Perl static HTML and JavaScript report generator (`bin/build_reports.pl`, `lib/ApacheLog/Parser.pm`, `lib/ApacheLog/StateStore.pm`, `lib/ApacheLog/ReportBuilder.pm`) with Chart.js visualizations and interactive filtering (`assets/report.js`, `assets/report.css`).

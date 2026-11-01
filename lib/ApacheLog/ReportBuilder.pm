@@ -128,19 +128,28 @@ sub _escape_html {
     return $str;
 }
 
+=head2 _render_nav_options
+
+Renders <option> elements for the virtual host navigation dropdown.
+Maintains the current view mode (charts vs details) when switching vhosts.
+
+=cut
+
 sub _render_nav_options {
-    my ($vhost_list, $current_slug, $root_prefix) = @_;
-    my $all_selected = ($current_slug eq 'all') ? ' selected' : '';
+    my ( $vhost_list, $current_slug, $root_prefix, $view_mode ) = @_;
+    $view_mode //= 'charts';
+    my $all_selected = ( $current_slug eq 'all' ) ? ' selected' : '';
     my @opts = (
         qq{<option value="${root_prefix}index.html"$all_selected>🌐 All Virtual Hosts (Comparison)</option>}
     );
-    for my $v (@$vhost_list) {
-        my $sel  = ($v->{slug} eq $current_slug) ? ' selected' : '';
-        my $href = "${root_prefix}vhosts/$v->{slug}.html";
-        my $name = _escape_html($v->{name});
+    for my $v ( @$vhost_list ) {
+        my $sel  = ( $v->{slug} eq $current_slug ) ? ' selected' : '';
+        my $page = ( $view_mode eq 'details' ) ? "$v->{slug}-details.html" : "$v->{slug}.html";
+        my $href = "${root_prefix}vhosts/$page";
+        my $name = _escape_html( $v->{name} );
         push @opts, qq{<option value="$href"$sel>$name ($v->{total_requests} reqs)</option>};
     }
-    return join("\n          ", @opts);
+    return join( "\n          ", @opts );
 }
 
 sub _write_index_page {
@@ -170,7 +179,7 @@ sub _write_index_page {
     };
 
     my $json_str = _encode_embedded_json($payload);
-    my $nav_opts = _render_nav_options($vhost_list, 'all', '');
+    my $nav_opts = _render_nav_options( $vhost_list, 'all', '', 'charts' );
 
     my $html = <<"HTML";
 <!DOCTYPE html>
@@ -497,7 +506,7 @@ sub _write_vhost_chart_page {
     };
 
     my $json_str = _encode_embedded_json($payload);
-    my $nav_opts = _render_nav_options($vhost_list, $slug, '../');
+    my $nav_opts = _render_nav_options( $vhost_list, $slug, '../', 'charts' );
 
     my $html = <<"HTML";
 <!DOCTYPE html>
@@ -701,7 +710,7 @@ sub _write_vhost_details_page {
     };
 
     my $json_str = _encode_embedded_json($payload);
-    my $nav_opts = _render_nav_options($vhost_list, $slug, '../');
+    my $nav_opts = _render_nav_options( $vhost_list, $slug, '../', 'details' );
 
     my $html = <<"HTML";
 <!DOCTYPE html>

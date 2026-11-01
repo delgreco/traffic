@@ -98,13 +98,22 @@
   }
 
   function setupSharedNavigation() {
-    const vhostSelect = document.getElementById('vhost-nav-select');
-    if (vhostSelect) {
-      vhostSelect.addEventListener('change', e => {
-        if (e.target.value) {
-          window.location.href = e.target.value;
+    const vhostSelect = document.getElementById( 'vhost-nav-select' );
+    if ( vhostSelect ) {
+      vhostSelect.addEventListener( 'change', e => {
+        let target = e.target.value;
+        if ( target ) {
+          if ( DATA.page_type === 'vhost_details' && target.endsWith( '.html' ) && ! target.endsWith( 'index.html' ) ) {
+            if ( ! target.includes( '-details.html' ) ) {
+              target = target.replace( /\.html$/, '-details.html' );
+            }
+          }
+          else if ( DATA.page_type === 'vhost_charts' && target.endsWith( '.html' ) ) {
+            target = target.replace( /-details\.html$/, '.html' );
+          }
+          window.location.href = target;
         }
-      });
+      } );
     }
 
     const startInput = document.getElementById('start-date');

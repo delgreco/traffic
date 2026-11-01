@@ -92,7 +92,13 @@ like($idx_html, qr/vhosts\/alpha\.example\.com\.html/, 'index.html dropdown link
 open my $det_fh, '<:encoding(UTF-8)', "$output_dir/vhosts/alpha.example.com-details.html" or die $!;
 my $det_html = do { local $/; <$det_fh> };
 close $det_fh;
-like($det_html, qr/"page_type":"vhost_details"/, 'Details HTML has page_type=vhost_details');
-like($det_html, qr/"\/missing\.png"/, 'Details HTML embeds endpoint & recent log data');
+like( $det_html, qr/"page_type":"vhost_details"/, 'Details HTML has page_type=vhost_details' );
+like( $det_html, qr/"\/missing\.png"/, 'Details HTML embeds endpoint & recent log data' );
+like( $det_html, qr/vhosts\/beta\.example\.com-details\.html/, 'Details dropdown preserves details view mode for other vhosts' );
+
+open my $chart_fh, '<:encoding(UTF-8)', "$output_dir/vhosts/alpha.example.com.html" or die $!;
+my $chart_html = do { local $/; <$chart_fh> };
+close $chart_fh;
+like( $chart_html, qr/vhosts\/beta\.example\.com\.html/, 'Chart dropdown preserves charts view mode for other vhosts' );
 
 done_testing();
