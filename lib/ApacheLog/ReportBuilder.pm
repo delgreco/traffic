@@ -372,12 +372,44 @@ sub _prepare_vhost_rankings {
     my ($vh) = @_;
 
     # Top Endpoints
-    my @endpoints = values %{ $vh->{endpoints} || {} };
-    @endpoints = sort { ($b->{requests} <=> $a->{requests}) || ($a->{path} cmp $b->{path}) } @endpoints;
-    splice(@endpoints, 100) if @endpoints > 100;
-    for my $ep (@endpoints) {
-        $ep->{avg_bytes} = $ep->{requests} > 0 ? int($ep->{bytes} / $ep->{requests}) : 0;
+    # Top Endpoints (keep up to 100 per resource type so images never crowd out pages)
+    my %by_type;
+    for my $ep ( values %{ $vh->{endpoints} || {} } ) {
+        my $ptype = $ep->{path_type} || ApacheLog::Parser::classify_path_type( $ep->{path} );
+        my $copy  = {
+            %{$ep},
+            path_type => $ptype,
+            avg_bytes => ( $ep->{requests} || 0 ) > 0 ? int( ( $ep->{bytes} || 0 ) / $ep->{requests} ) : 0,
+        };
+        push @{ $by_type{$ptype} }, $copy;
     }
+    my @endpoints;
+    for my $ptype ( sort keys %by_type ) {
+        my @group = sort { ( $b->{requests} <=> $a->{requests} ) || ( $a->{path} cmp $b->{path} ) } @{ $by_type{$ptype} };
+        splice( @group, 100 ) if @group > 100;
+        push @endpoints, @group;
+    }
+    @endpoints = sort { ( $b->{requests} <=> $a->{requests} ) || ( $a->{path} cmp $b->{path} ) } @endpoints;
+
+    # Content / Resource Type Breakdown
+    my %pt_totals = %{ $vh->{path_types} || {} };
+    if ( ! %pt_totals ) {
+        for my $ep ( values %{ $vh->{endpoints} || {} } ) {
+            my $ptype = $ep->{path_type} || ApacheLog::Parser::classify_path_type( $ep->{path} );
+            my $rec   = ( $pt_totals{$ptype} ||= { requests => 0, bytes => 0 } );
+            $rec->{requests} += $ep->{requests} || 0;
+            $rec->{bytes}    += $ep->{bytes}    || 0;
+        }
+    }
+    my @path_types;
+    for my $ptype ( keys %pt_totals ) {
+        push @path_types, {
+            path_type => $ptype,
+            requests  => $pt_totals{$ptype}{requests} || 0,
+            bytes     => $pt_totals{$ptype}{bytes}    || 0,
+        };
+    }
+    @path_types = sort { $b->{requests} <=> $a->{requests} } @path_types;
 
     # HTTP Methods
     my @methods;
@@ -502,6 +534,7 @@ sub _prepare_vhost_rankings {
 
     return {
         endpoints       => \@endpoints,
+        path_types      => \@path_types,
         methods         => \@methods,
         ips             => \@ips,
         referrers       => \@referrers,
@@ -536,6 +569,7 @@ sub _write_vhost_chart_page {
         unique_ips      => $v_meta->{unique_ips},
         hourly          => $vh->{hourly} || {},
         methods         => $rankings->{methods},
+        path_types      => $rankings->{path_types},
         ua_categories   => $rankings->{ua_categories},
         error_codes     => $rankings->{error_codes},
         ext_ref_domains => \@chart_ext_domains,
@@ -683,7 +717,7 @@ sub _write_vhost_chart_page {
       </div>
     </div>
 
-    <div class="grid-3col">
+    <div class="grid-2col">
       <div class="panel-card">
         <div class="panel-header">
           <div>
@@ -705,6 +739,18 @@ sub _write_vhost_chart_page {
         </div>
         <div class="chart-container chart-md">
           <canvas id="chart-vh-ua-cat"></canvas>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-header">
+          <div>
+            <h3 class="panel-title">Content Types (Pages vs. Files)</h3>
+            <p class="panel-subtitle">Pages/API routes compared with images, CSS/JS/fonts, and other static files</p>
+          </div>
+        </div>
+        <div class="chart-container chart-md">
+          <canvas id="chart-vh-path-types"></canvas>
         </div>
       </div>
 
@@ -827,15 +873,25 @@ sub _write_vhost_details_page {
         <div class="panel-header">
           <div>
             <h3 class="panel-title">Top Requested URLs / Endpoints</h3>
-            <p class="panel-subtitle">Search or filter endpoints by path or HTTP method</p>
+            <p class="panel-subtitle">Defaults to Pages &amp; API routes; switch tabs to inspect Images, CSS/JS/Fonts, or Other Files</p>
           </div>
-          <input type="search" id="search-endpoints" class="text-input" placeholder="Filter path or method...">
+          <div class="ref-controls">
+            <div class="btn-group" role="group" aria-label="Endpoint resource type">
+              <button type="button" class="btn-chip active" data-ep-type="page">Pages &amp; API</button>
+              <button type="button" class="btn-chip" data-ep-type="image">Images</button>
+              <button type="button" class="btn-chip" data-ep-type="asset">CSS / JS / Fonts</button>
+              <button type="button" class="btn-chip" data-ep-type="file">Other Files</button>
+              <button type="button" class="btn-chip" data-ep-type="all">All</button>
+            </div>
+            <input type="search" id="search-endpoints" class="text-input" placeholder="Filter path or method...">
+          </div>
         </div>
         <div class="table-responsive">
           <table class="data-table">
             <thead>
               <tr>
                 <th>Method</th>
+                <th>Type</th>
                 <th>Path</th>
                 <th class="num">Requests</th>
                 <th class="num">Total Bandwidth</th>
@@ -1049,6 +1105,16 @@ sub _write_vhost_details_page {
               <option value="Bot">Bot / Crawler</option>
               <option value="CLI/API">CLI / API</option>
               <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="filter-path-type">Resource Type</label>
+            <select id="filter-path-type" class="select-input">
+              <option value="">All Resources</option>
+              <option value="page">Pages &amp; API</option>
+              <option value="image">Images</option>
+              <option value="asset">CSS / JS / Fonts</option>
+              <option value="file">Other Files</option>
             </select>
           </div>
           <div class="filter-actions">

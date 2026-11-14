@@ -493,6 +493,26 @@ a {
   color: #c084fc;
 }
 
+.badge-page {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+}
+
+.badge-image {
+  background: rgba(236, 72, 153, 0.16);
+  color: #f472b6;
+}
+
+.badge-asset {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+
+.badge-file {
+  background: rgba(20, 184, 166, 0.16);
+  color: #2dd4bf;
+}
+
 /* Raw Log Filter Bar & Pagination */
 .log-filter-bar {
   display: flex;

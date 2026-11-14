@@ -112,6 +112,7 @@ sub parse_line {
     $origin  = '' if ! defined $origin  || $origin eq '-' || lc( $origin ) eq 'null';
 
     my ( $ua_category, $ua_family ) = classify_user_agent( $ua );
+    my $path_type = classify_path_type( $path );
 
     return {
         vhost          => $vhost,
@@ -119,6 +120,7 @@ sub parse_line {
         client_ip      => $client_ip,
         method         => $method,
         path           => $path,
+        path_type      => $path_type,
         query_string   => $query_string,
         protocol       => $protocol,
         status         => int( $status ),
@@ -277,6 +279,28 @@ sub extract_campaign_params {
         campaign   => $found{utm_campaign} // '',
         click_type => $click_type,
     };
+}
+
+=head2 classify_path_type
+
+Classifies a request path into one of C<page>, C<image>, C<asset>, or C<file>.
+
+=cut
+
+sub classify_path_type {
+    my ( $path ) = @_;
+    return 'page' if ! defined $path || $path eq '';
+
+    if ( $path =~ /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?)$/i ) {
+        return 'image';
+    }
+    elsif ( $path =~ /\.(?:css|js|mjs|map|woff2?|ttf|eot|otf)$/i ) {
+        return 'asset';
+    }
+    elsif ( $path =~ /\.(?:pdf|zip|gz|tar|tgz|bz2|xz|7z|mp3|mp4|webm|ogg|wav|mov|avi|json|xml|txt|csv|xlsx?|docx?|pptx?)$/i ) {
+        return 'file';
+    }
+    return 'page';
 }
 
 =head2 classify_user_agent

@@ -133,6 +133,15 @@ like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains 
     like( $dd_html, qr/"domain":"widget\.external\.org"/, 'Details HTML includes Origin header fallback external domain' );
     like( $dd_html, qr/"int_ref_urls":\[\{[^}]*"url":"https:\/\/dedup\.example\.com\/"/, 'Details HTML tracks internal self-referrals separately' );
     like( $dd_html, qr/"campaign":"launch"/, 'Details HTML embeds extracted campaign attribution' );
+    like( $dd_html, qr/"path_type":"page"/, 'Details HTML embeds path_type=page on endpoints' );
+    like( $dd_html, qr/data-ep-type="page"/, 'Details HTML includes resource-type filter chips' );
+
+    open my $alpha_chart_fh, '<:encoding(UTF-8)', "$output_dir/vhosts/alpha.example.com.html" or die $!;
+    my $alpha_chart_html = do { local $/; <$alpha_chart_fh> };
+    close $alpha_chart_fh;
+    like( $alpha_chart_html, qr/"path_types":\[/, 'Chart HTML embeds path_types breakdown' );
+    like( $alpha_chart_html, qr/"path_type":"image"/, 'Chart HTML records image requests in path_types' );
+    like( $alpha_chart_html, qr/id="chart-vh-path-types"/, 'Chart HTML includes Content Types canvas' );
 }
 
 done_testing();

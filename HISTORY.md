@@ -1,5 +1,12 @@
 # History
 
+## 2026-11-14 - Classify and Filter Page/API vs. Image, CSS/JS, and File Requests
+
+- Added `classify_path_type` in `lib/ApacheLog/Parser.pm` to tag every parsed request as `page`, `image`, `asset` (CSS/JS/fonts/maps), or `file` (PDF/media/data/text).
+- Extended `lib/ApacheLog/StateStore.pm` to track `path_type` on endpoints and `recent_logs` entries plus per-vhost `path_types` request/byte rollups while continuing to record all requests.
+- Updated `lib/ApacheLog/ReportBuilder.pm`, `assets/report.js`, and `assets/report.css` to retain up to 100 endpoints per resource type, add a **Content Types (Pages vs. Files)** doughnut chart on vhost chart pages, default **Top Requested URLs / Endpoints** to **Pages & API** with chips for **Images**, **CSS / JS / Fonts**, **Other Files**, and **All**, and add a **Resource Type** filter in **Recent Request Log Explorer**.
+- Expanded `t/01-parser.t` and `t/02-static-builder.t` (`90/90` tests passing) and completed a clean `--reset` rebuild of `output/`.
+
 ## 2026-11-13 - Move Top External Referrer Domains Panel First After KPI Cards
 
 - Updated `lib/ApacheLog/ReportBuilder.pm` so the Top External Referrer Domains panel appears immediately after the KPI summary cards on each virtual host's Charts Overview page.

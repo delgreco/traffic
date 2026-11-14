@@ -93,4 +93,23 @@ my $parser = ApacheLog::Parser->new();
     is( $camp->{click_type}, 'Meta/Facebook (fbclid)', 'Detected click_type' );
 }
 
+# 7. Test classify_path_type across pages, images, CSS/JS/fonts, and other files
+{
+    is( ApacheLog::Parser::classify_path_type( '/images/hero.jpg' ), 'image', 'Classified .jpg as image' );
+    is( ApacheLog::Parser::classify_path_type( '/logo.PNG' ), 'image', 'Classified .PNG as image (case-insensitive)' );
+    is( ApacheLog::Parser::classify_path_type( '/favicon.ico' ), 'image', 'Classified .ico as image' );
+    is( ApacheLog::Parser::classify_path_type( '/css/styles.css' ), 'asset', 'Classified .css as asset' );
+    is( ApacheLog::Parser::classify_path_type( '/js/app.min.js' ), 'asset', 'Classified .js as asset' );
+    is( ApacheLog::Parser::classify_path_type( '/fonts/inter.woff2' ), 'asset', 'Classified .woff2 as asset' );
+    is( ApacheLog::Parser::classify_path_type( '/data/menu.json' ), 'file', 'Classified .json as file' );
+    is( ApacheLog::Parser::classify_path_type( '/docs/guide.pdf' ), 'file', 'Classified .pdf as file' );
+    is( ApacheLog::Parser::classify_path_type( '/' ), 'page', 'Classified / as page' );
+    is( ApacheLog::Parser::classify_path_type( '/about' ), 'page', 'Classified /about as page' );
+    is( ApacheLog::Parser::classify_path_type( '/api/v1/items' ), 'page', 'Classified /api/v1/items as page' );
+
+    my $img_line = 'shop.example.com:443 203.0.113.50 - - [25/Oct/2026:15:25:00 +0000] "GET /hero.webp HTTP/2.0" 200 12000 "-" "Mozilla/5.0"';
+    my $img_res = $parser->parse_line( $img_line );
+    is( $img_res->{path_type}, 'image', 'parse_line attaches path_type=image' );
+}
+
 done_testing();

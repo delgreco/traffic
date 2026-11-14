@@ -16,6 +16,8 @@
     compareMetric: 'requests',
     shareMetric: 'requests',
     vhostChartMode: 'status',
+    epTypeFilter: 'page',
+    epQuery: '',
     refMode: 'ext_domains',
     refIncludeNoise: false,
     refQuery: '',
@@ -615,7 +617,44 @@
       }
     });
 
-    // 4. Error Status Codes Chart
+    // 4. Content Types (Pages vs. Files) Chart
+    destroyChart('vhPathTypes');
+    const ptCanvas = document.getElementById('chart-vh-path-types');
+    if (ptCanvas) {
+      const ptLabels = {
+        page: 'Pages & API',
+        image: 'Images',
+        asset: 'CSS / JS / Fonts',
+        file: 'Other Files'
+      };
+      const ptColors = {
+        page: '#38bdf8',
+        image: '#ec4899',
+        asset: '#f59e0b',
+        file: '#14b8a6'
+      };
+      const pathTypes = DATA.path_types || [];
+      const ctxPt = ptCanvas.getContext('2d');
+      state.charts.vhPathTypes = new Chart(ctxPt, {
+        type: 'doughnut',
+        data: {
+          labels: pathTypes.length ? pathTypes.map(p => ptLabels[p.path_type] || p.path_type) : ['No data'],
+          datasets: [{
+            data: pathTypes.length ? pathTypes.map(p => p.requests) : [0],
+            backgroundColor: pathTypes.length ? pathTypes.map(p => ptColors[p.path_type] || '#64748b') : ['#334155'],
+            borderColor: '#1e293b',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } }
+        }
+      });
+    }
+
+    // 5. Error Status Codes Chart
     destroyChart('vhErrorCodes');
     const errCodes = DATA.error_codes || [];
     const ctxErr = document.getElementById('chart-vh-error-codes').getContext('2d');
@@ -673,8 +712,26 @@
   // ===========================================================================
   // PAGE TYPE 3: DETAILED TRAFFIC & LOGS PAGE (vhosts/<slug>-details.html)
   // ===========================================================================
+  function inferPathType(path) {
+    const p = String(path || '');
+    if (/\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?)$/i.test(p)) return 'image';
+    if (/\.(?:css|js|mjs|map|woff2?|ttf|eot|otf)$/i.test(p)) return 'asset';
+    if (/\.(?:pdf|zip|gz|tar|tgz|bz2|xz|7z|mp3|mp4|webm|ogg|wav|mov|avi|json|xml|txt|csv|xlsx?|docx?|pptx?)$/i.test(p)) return 'file';
+    return 'page';
+  }
+
+  function renderPathTypeBadge(type) {
+    const meta = {
+      page: { label: 'Page/API', cls: 'badge-page' },
+      image: { label: 'Image', cls: 'badge-image' },
+      asset: { label: 'CSS/JS', cls: 'badge-asset' },
+      file: { label: 'File', cls: 'badge-file' }
+    }[type] || { label: type || 'Page/API', cls: 'badge-method' };
+    return `<span class="badge ${meta.cls}">${escapeHtml(meta.label)}</span>`;
+  }
+
   function renderVhostDetailsPage() {
-    renderEndpointsTable('');
+    renderEndpointsTable();
     renderIpsTable('');
     renderUaAndReferrersTables();
     renderErrorsTables();
@@ -682,21 +739,30 @@
   }
 
   function renderEndpointsTable(query) {
-    const q = (query || '').toLowerCase().trim();
+    if (typeof query === 'string') {
+      state.epQuery = query;
+    }
+    const q = (state.epQuery || '').toLowerCase().trim();
+    const typeFilter = state.epTypeFilter || 'page';
     const eps = (DATA.endpoints || []).filter(ep => {
+      const ptype = ep.path_type || inferPathType(ep.path);
+      if (typeFilter !== 'all' && ptype !== typeFilter) return false;
       if (!q) return true;
       return ep.path.toLowerCase().includes(q) || ep.method.toLowerCase().includes(q);
     });
 
     const tbody = document.getElementById('tbody-vh-endpoints');
     if (!eps.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;">No matching endpoints found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;">No matching endpoints found for this filter.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = eps.map(ep => `
+    tbody.innerHTML = eps.map(ep => {
+      const ptype = ep.path_type || inferPathType(ep.path);
+      return `
       <tr>
         <td><span class="badge badge-method">${escapeHtml(ep.method)}</span></td>
+        <td>${renderPathTypeBadge(ptype)}</td>
         <td class="mono truncate-cell" title="${escapeHtml(ep.path)}">${escapeHtml(ep.path)}</td>
         <td class="num">${fmtNumber(ep.requests)}</td>
         <td class="num">${fmtBytes(ep.bytes)}</td>
@@ -710,7 +776,8 @@
           </button>
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   }
 
   function renderIpsTable(query) {
@@ -894,10 +961,12 @@
     const methodQ = document.getElementById('filter-method')?.value || '';
     const statusQ = document.getElementById('filter-status')?.value || '';
     const uaCatQ = document.getElementById('filter-ua-cat')?.value || '';
+    const pathTypeQ = document.getElementById('filter-path-type')?.value || '';
 
     const filtered = allLogs.filter(l => {
       if (methodQ && l.method !== methodQ) return false;
       if (uaCatQ && l.ua_category !== uaCatQ) return false;
+      if (pathTypeQ && (l.path_type || inferPathType(l.path)) !== pathTypeQ) return false;
       if (ipQ && !l.client_ip.toLowerCase().includes(ipQ)) return false;
       if (pathQ) {
         const fullUri = l.query_string ? `${l.path}?${l.query_string}` : l.path;
@@ -995,6 +1064,15 @@
         btn.addEventListener('click', () => switchSubtab(btn.dataset.subtab));
       });
 
+      document.querySelectorAll('[data-ep-type]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-ep-type]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.epTypeFilter = btn.dataset.epType || 'page';
+          renderEndpointsTable();
+        });
+      });
+
       const epSearch = document.getElementById('search-endpoints');
       if (epSearch) {
         epSearch.addEventListener('input', e => renderEndpointsTable(e.target.value));
@@ -1038,12 +1116,14 @@
         document.getElementById('filter-method').value = btn.dataset.method || '';
         document.getElementById('filter-status').value = btn.dataset.status || '';
         document.getElementById('filter-ua-cat').value = '';
+        const pathTypeEl = document.getElementById('filter-path-type');
+        if (pathTypeEl) pathTypeEl.value = '';
         state.logsPage = 1;
         switchSubtab('tab-rawlogs');
         renderFilteredRawLogs();
       });
 
-      ['filter-path', 'filter-ip', 'filter-method', 'filter-status', 'filter-ua-cat'].forEach(id => {
+      ['filter-path', 'filter-ip', 'filter-method', 'filter-status', 'filter-ua-cat', 'filter-path-type'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
           el.addEventListener('input', () => {
@@ -1063,6 +1143,8 @@
         document.getElementById('filter-method').value = '';
         document.getElementById('filter-status').value = '';
         document.getElementById('filter-ua-cat').value = '';
+        const pathTypeEl = document.getElementById('filter-path-type');
+        if (pathTypeEl) pathTypeEl.value = '';
         state.logsPage = 1;
         renderFilteredRawLogs();
       });

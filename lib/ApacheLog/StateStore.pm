@@ -150,6 +150,7 @@ sub _ensure_vhost {
             ext_ref_urls    => {}, # url => { url, domain, requests, human_ok_requests, bot_or_err_requests, is_origin_fallback }
             int_ref_urls    => {}, # url => { url, requests, human_ok_requests, bot_or_err_requests }
             campaigns       => {}, # "source|medium|campaign|click_type" => { source, medium, campaign, click_type, requests, human_ok_requests }
+            path_types      => {}, # path_type => { requests, bytes }
             ua_categories   => {}, # category => { requests, bytes }
             ua_families     => {}, # "category|family" => { category, family, requests, bytes }
             error_codes     => {}, # status => requests
@@ -162,7 +163,7 @@ sub _ensure_vhost {
     else {
         $vh->{first_seen} = $ts if $ts < $vh->{first_seen};
         $vh->{last_seen}  = $ts if $ts > $vh->{last_seen};
-        for my $field ( qw( ext_ref_domains ext_ref_urls int_ref_urls campaigns ) ) {
+        for my $field ( qw( ext_ref_domains ext_ref_urls int_ref_urls campaigns path_types ) ) {
             $vh->{$field} //= {};
         }
     }
@@ -353,22 +354,29 @@ sub _process_handle {
         elsif ($status >= 500)                  { $h->{status_5xx}++; }
         if ($is_bot) { $h->{bot_requests}++; } else { $h->{human_requests}++; }
 
-        # 2. Endpoint rollup
+        # 2. Endpoint & resource-type rollups
+        my $ptype  = $row->{path_type} || ApacheLog::Parser::classify_path_type( $row->{path} );
         my $ep_key = "$row->{method} $row->{path}";
-        my $ep = ($vh->{endpoints}{$ep_key} ||= {
+        my $ep = ( $vh->{endpoints}{$ep_key} ||= {
             method    => $row->{method},
             path      => $row->{path},
+            path_type => $ptype,
             requests  => 0,
             bytes     => 0,
             error_4xx => 0,
             error_5xx => 0,
             last_seen => $ts,
-        });
+        } );
+        $ep->{path_type} = $ptype;
         $ep->{requests}++;
         $ep->{bytes} += $bytes;
         $ep->{error_4xx}++ if $status >= 400 && $status < 500;
         $ep->{error_5xx}++ if $status >= 500;
         $ep->{last_seen} = $ts if $ts > $ep->{last_seen};
+
+        my $pt = ( $vh->{path_types}{$ptype} ||= { requests => 0, bytes => 0 } );
+        $pt->{requests}++;
+        $pt->{bytes} += $bytes;
 
         # 3. HTTP Method rollup
         my $m = ($vh->{methods}{ $row->{method} } ||= { requests => 0, bytes => 0 });
@@ -503,6 +511,7 @@ sub _process_handle {
                 client_ip    => $row->{client_ip},
                 method       => $row->{method},
                 path         => $row->{path},
+                path_type    => $ptype,
                 query_string => $row->{query_string},
                 status       => $status,
                 bytes        => $bytes,
