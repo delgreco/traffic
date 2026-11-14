@@ -100,5 +100,39 @@ open my $chart_fh, '<:encoding(UTF-8)', "$output_dir/vhosts/alpha.example.com.ht
 my $chart_html = do { local $/; <$chart_fh> };
 close $chart_fh;
 like( $chart_html, qr/vhosts\/beta\.example\.com\.html/, 'Chart dropdown preserves charts view mode for other vhosts' );
+like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains array' );
+
+# 6. Verify skip_common_format, external vs internal referrals, origin fallback, and campaigns
+{
+    my $dedup_log = "$tmp_dir/dedup.example.com-access.log";
+    open my $dfh, '>', $dedup_log or die $!;
+    print {$dfh} qq{10.9.9.1 - - [$ts_recent] "GET / HTTP/1.1" 200 100\n}; # common duplicate
+    print {$dfh} qq{10.9.9.1 - - [$ts_recent] "GET /?utm_source=bing&utm_medium=cpc&utm_campaign=launch HTTP/1.1" 200 100 "https://alpha.example.com/about" "Mozilla/5.0 Chrome/128.0"\n};
+    print {$dfh} qq{10.9.9.2 - - [$ts_recent] "GET /api/ping HTTP/1.1" 200 50 "-" "Mozilla/5.0 Chrome/128.0" "https://widget.external.org"\n};
+    print {$dfh} qq{10.9.9.3 - - [$ts_recent] "GET /cart HTTP/1.1" 200 100 "https://dedup.example.com/" "Mozilla/5.0 Chrome/128.0"\n};
+    close $dfh;
+
+    my $r_dedup = $store->ingest_file(
+        $dedup_log,
+        default_vhost      => 'dedup.example.com',
+        skip_common_format => 1,
+    );
+    is( $r_dedup->{lines_read}, 4, 'Read 4 lines from dedup test log' );
+    is( $r_dedup->{lines_skipped}, 1, 'Skipped 1 common-format line when skip_common_format=1' );
+    is( $r_dedup->{lines_ingested}, 3, 'Ingested 3 combined/combined-origin lines' );
+
+    ApacheLog::ReportBuilder->new(
+        store      => $store,
+        output_dir => $output_dir,
+    )->build_all();
+
+    open my $dd_fh, '<:encoding(UTF-8)', "$output_dir/vhosts/dedup.example.com-details.html" or die $!;
+    my $dd_html = do { local $/; <$dd_fh> };
+    close $dd_fh;
+    like( $dd_html, qr/"domain":"alpha\.example\.com"/, 'Details HTML includes external referrer domain' );
+    like( $dd_html, qr/"domain":"widget\.external\.org"/, 'Details HTML includes Origin header fallback external domain' );
+    like( $dd_html, qr/"int_ref_urls":\[\{[^}]*"url":"https:\/\/dedup\.example\.com\/"/, 'Details HTML tracks internal self-referrals separately' );
+    like( $dd_html, qr/"campaign":"launch"/, 'Details HTML embeds extracted campaign attribution' );
+}
 
 done_testing();

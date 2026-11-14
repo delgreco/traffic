@@ -545,3 +545,51 @@ a {
 .mt-md {
   margin-top: 1.25rem;
 }
+
+/* Referrer Controls */
+.ref-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.ref-controls .btn-group {
+  flex-wrap: wrap;
+}
+
+.ref-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.toggle-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-check input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+}
+
+@media (max-width: 768px) {
+  .ref-controls {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .ref-filter-row {
+    width: 100%;
+  }
+
+  .ref-filter-row .text-input {
+    flex: 1 1 200px;
+  }
+}

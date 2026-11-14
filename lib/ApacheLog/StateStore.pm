@@ -135,28 +135,36 @@ sub _ensure_vhost {
     my ($self, $name, $ts) = @_;
     my $vhosts = $self->{state}{vhosts};
     my $vh = $vhosts->{$name};
-    if (!$vh) {
+    if ( ! $vh ) {
         $vh = {
-            name         => $name,
-            slug         => vhost_slug($name),
-            first_seen   => $ts,
-            last_seen    => $ts,
-            hourly       => {}, # hour_bucket => { requests, bytes, s2xx, s3xx, s4xx, s5xx, bots, humans }
-            endpoints    => {}, # "METHOD path" => { method, path, requests, bytes, error_4xx, error_5xx, last_seen }
-            methods      => {}, # METHOD => { requests, bytes }
-            ips          => {}, # client_ip => { requests, bytes, error_count, last_seen }
-            referrers    => {}, # referer => requests
-            ua_categories => {}, # category => { requests, bytes }
-            ua_families  => {}, # "category|family" => { category, family, requests, bytes }
-            error_codes  => {}, # status => requests
-            error_urls   => {}, # "status|METHOD|path" => { status, method, path, requests, ips => {} }
-            error_ips    => {}, # client_ip => { count_4xx, count_5xx, paths => {} }
-            recent_logs  => [], # bounded array of recent raw log hashes
+            name            => $name,
+            slug            => vhost_slug($name),
+            first_seen      => $ts,
+            last_seen       => $ts,
+            hourly          => {}, # hour_bucket => { requests, bytes, s2xx, s3xx, s4xx, s5xx, bots, humans }
+            endpoints       => {}, # "METHOD path" => { method, path, requests, bytes, error_4xx, error_5xx, last_seen }
+            methods         => {}, # METHOD => { requests, bytes }
+            ips             => {}, # client_ip => { requests, bytes, error_count, last_seen }
+            referrers       => {}, # referer => requests
+            ext_ref_domains => {}, # domain => { domain, requests, human_ok_requests, bot_or_err_requests, last_seen }
+            ext_ref_urls    => {}, # url => { url, domain, requests, human_ok_requests, bot_or_err_requests, is_origin_fallback }
+            int_ref_urls    => {}, # url => { url, requests, human_ok_requests, bot_or_err_requests }
+            campaigns       => {}, # "source|medium|campaign|click_type" => { source, medium, campaign, click_type, requests, human_ok_requests }
+            ua_categories   => {}, # category => { requests, bytes }
+            ua_families     => {}, # "category|family" => { category, family, requests, bytes }
+            error_codes     => {}, # status => requests
+            error_urls      => {}, # "status|METHOD|path" => { status, method, path, requests, ips => {} }
+            error_ips       => {}, # client_ip => { count_4xx, count_5xx, paths => {} }
+            recent_logs     => [], # bounded array of recent raw log hashes
         };
         $vhosts->{$name} = $vh;
-    } else {
+    }
+    else {
         $vh->{first_seen} = $ts if $ts < $vh->{first_seen};
         $vh->{last_seen}  = $ts if $ts > $vh->{last_seen};
+        for my $field ( qw( ext_ref_domains ext_ref_urls int_ref_urls campaigns ) ) {
+            $vh->{$field} //= {};
+        }
     }
     return $vh;
 }
@@ -183,9 +191,10 @@ sub ingest_configured_sources {
             }
             my $res = $self->ingest_file(
                 $file,
-                default_vhost => $vhost,
-                force         => $opts{force},
-                no_save       => 1,
+                default_vhost      => $vhost,
+                skip_common_format => $src->{skip_common_format} ? 1 : 0,
+                force              => $opts{force},
+                no_save            => 1,
             );
             $totals{files_processed}++;
             $totals{lines_read}     += $res->{lines_read};
@@ -260,8 +269,9 @@ sub ingest_file {
 
     my $res = $self->_process_handle(
         $fh,
-        file_path     => $abs_path,
-        default_vhost => $opts{default_vhost},
+        file_path          => $abs_path,
+        default_vhost      => $opts{default_vhost},
+        skip_common_format => $opts{skip_common_format} ? 1 : 0,
     );
 
     my $end_offset = $is_gz ? $size : tell($fh);
@@ -296,14 +306,18 @@ sub _process_handle {
         : 0;
     my $max_recent = $self->{max_recent_logs_per_vhost};
 
-    while (my $line = <$fh>) {
+    while ( my $line = <$fh> ) {
         $lines_read++;
         my $row = $self->{parser}->parse_line(
             $line,
             default_vhost => $opts{default_vhost},
             file_path     => $opts{file_path},
         );
-        if (!$row) {
+        if ( ! $row ) {
+            $lines_skipped++;
+            next;
+        }
+        if ( $opts{skip_common_format} && ! $row->{has_referer_ua} ) {
             $lines_skipped++;
             next;
         }
@@ -373,9 +387,75 @@ sub _process_handle {
         $ip->{error_count}++ if $status >= 400;
         $ip->{last_seen} = $ts if $ts > $ip->{last_seen};
 
-        # 5. Referrer rollup
-        if (defined $row->{referer} && $row->{referer} ne '') {
+        # 5. Referrer, Origin fallback, and Campaign rollups
+        my $is_human_ok = ( ( $row->{ua_category} || '' ) ne 'Bot' && ( $row->{status} || 0 ) < 400 ) ? 1 : 0;
+        my $has_referer = ( defined $row->{referer} && $row->{referer} ne '' ) ? 1 : 0;
+        if ( $has_referer ) {
             $vh->{referrers}{ $row->{referer} }++;
+        }
+
+        my $ref_candidate = $has_referer ? $row->{referer} : ( $row->{origin} || '' );
+        my $is_origin_fallback = ( ! $has_referer && defined $row->{origin} && $row->{origin} ne '' ) ? 1 : 0;
+        if ( $ref_candidate ne '' ) {
+            my $ref_info = ApacheLog::Parser::classify_referer( $ref_candidate, $vh->{name} );
+            if ( $ref_info ) {
+                if ( $ref_info->{scope} eq 'external' ) {
+                    my $dom = $ref_info->{domain};
+                    my $url = $ref_info->{url};
+
+                    my $d_rec = $vh->{ext_ref_domains}{$dom} ||= {
+                        domain              => $dom,
+                        requests            => 0,
+                        human_ok_requests   => 0,
+                        bot_or_err_requests => 0,
+                        last_seen           => $row->{timestamp},
+                    };
+                    $d_rec->{requests}++;
+                    $d_rec->{human_ok_requests}++   if $is_human_ok;
+                    $d_rec->{bot_or_err_requests}++ if ! $is_human_ok;
+                    $d_rec->{last_seen} = $row->{timestamp} if $row->{timestamp} > $d_rec->{last_seen};
+
+                    my $u_rec = $vh->{ext_ref_urls}{$url} ||= {
+                        url                 => $url,
+                        domain              => $dom,
+                        requests            => 0,
+                        human_ok_requests   => 0,
+                        bot_or_err_requests => 0,
+                        is_origin_fallback  => $is_origin_fallback,
+                    };
+                    $u_rec->{requests}++;
+                    $u_rec->{human_ok_requests}++   if $is_human_ok;
+                    $u_rec->{bot_or_err_requests}++ if ! $is_human_ok;
+                    $u_rec->{is_origin_fallback} = 0 if ! $is_origin_fallback;
+                }
+                elsif ( $ref_info->{scope} eq 'internal' ) {
+                    my $url = $ref_info->{url};
+                    my $i_rec = $vh->{int_ref_urls}{$url} ||= {
+                        url                 => $url,
+                        requests            => 0,
+                        human_ok_requests   => 0,
+                        bot_or_err_requests => 0,
+                    };
+                    $i_rec->{requests}++;
+                    $i_rec->{human_ok_requests}++   if $is_human_ok;
+                    $i_rec->{bot_or_err_requests}++ if ! $is_human_ok;
+                }
+            }
+        }
+
+        my $campaign = ApacheLog::Parser::extract_campaign_params( $row->{query_string} );
+        if ( $campaign ) {
+            my $ckey = join( '|', $campaign->{source}, $campaign->{medium}, $campaign->{campaign}, $campaign->{click_type} );
+            my $c_rec = $vh->{campaigns}{$ckey} ||= {
+                source            => $campaign->{source},
+                medium            => $campaign->{medium},
+                campaign          => $campaign->{campaign},
+                click_type        => $campaign->{click_type},
+                requests          => 0,
+                human_ok_requests => 0,
+            };
+            $c_rec->{requests}++;
+            $c_rec->{human_ok_requests}++ if $is_human_ok;
         }
 
         # 6. User-Agent category & family rollups

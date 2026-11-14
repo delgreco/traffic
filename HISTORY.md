@@ -1,5 +1,17 @@
 # History
 
+## 2026-11-13 - Move Top External Referrer Domains Panel First After KPI Cards
+
+- Updated `lib/ApacheLog/ReportBuilder.pm` so the Top External Referrer Domains panel appears immediately after the KPI summary cards on each virtual host's Charts Overview page.
+
+## 2026-11-13 - Maximize Apache Referral Capture, Deduplicate Common Logs, and Add External/Campaign UI
+
+- Removed duplicate `TransferLog` from `/etc/apache2/sites-available/behave.conf` and added/enabled `/etc/apache2/conf-available/combined-origin.conf` to capture trailing `%{Origin}i` headers alongside `Referer` and `User-Agent`.
+- Added `skip_common_format` option in `config/traffic.json` and `lib/ApacheLog/StateStore.pm` to skip duplicate `common`-format lines in `access.log*` during ingestion.
+- Extended `lib/ApacheLog/Parser.pm` to parse trailing `%{Origin}i` headers, flag `has_referer_ua`, classify referrers into external vs. internal domains/URLs (`classify_referer`), and extract `utm_*` and click-ID campaign parameters (`extract_campaign_params`).
+- Updated `lib/ApacheLog/StateStore.pm`, `lib/ApacheLog/ReportBuilder.pm`, `assets/report.js`, and `assets/report.css` to track `ext_ref_domains`, `ext_ref_urls`, `int_ref_urls`, and `campaigns` with human 2xx/3xx vs. bot/4xx/5xx separation, add the Top External Referrer Domains chart on vhost chart pages, and add External Domains / External URLs / Campaigns / Internal mode tabs + noise toggle on vhost details pages.
+- Expanded `t/01-parser.t` and `t/02-static-builder.t` (73 tests passing) and performed a clean `--reset` rebuild of all static HTML reports.
+
 ## 2026-11-01 - Preserve View Mode on Virtual Host Selection
 
 - Updated `lib/ApacheLog/ReportBuilder.pm` so the Virtual Host `<select>` navigation options preserve the active View Mode (Charts Overview vs. Detailed Traffic & Logs) when switching between virtual hosts.

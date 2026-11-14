@@ -16,6 +16,9 @@
     compareMetric: 'requests',
     shareMetric: 'requests',
     vhostChartMode: 'status',
+    refMode: 'ext_domains',
+    refIncludeNoise: false,
+    refQuery: '',
     logsPage: 1,
     logsPerPage: 50,
     charts: {}
@@ -636,6 +639,35 @@
         }
       }
     });
+
+    // 5. Top External Referrer Domains Chart
+    destroyChart('vhReferrers');
+    const refCanvas = document.getElementById('chart-vh-referrers');
+    if (refCanvas) {
+      const topDomains = (DATA.ext_ref_domains || []).filter(d => (d.human_ok_requests || 0) > 0).slice(0, 15);
+      const ctxRef = refCanvas.getContext('2d');
+      state.charts.vhReferrers = new Chart(ctxRef, {
+        type: 'bar',
+        data: {
+          labels: topDomains.length ? topDomains.map(d => d.domain) : ['No external human referrals'],
+          datasets: [{
+            label: 'Human 2xx/3xx Referrals',
+            data: topDomains.length ? topDomains.map(d => d.human_ok_requests) : [0],
+            backgroundColor: '#38bdf8'
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,0.35)' } },
+            y: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(51,65,85,0.2)' } }
+          }
+        }
+      });
+    }
   }
 
   // ===========================================================================
@@ -717,14 +749,93 @@
       </tr>
     `).join('');
 
-    const refs = DATA.referrers || [];
-    const tbodyRefs = document.getElementById('tbody-vh-referrers');
-    if (!refs.length) {
-      tbodyRefs.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#94a3b8;">No external referrers recorded.</td></tr>';
+    renderReferrersTable();
+  }
+
+  function renderReferrersTable() {
+    const thead = document.getElementById('thead-vh-referrers');
+    const tbody = document.getElementById('tbody-vh-referrers');
+    if (!thead || !tbody) return;
+
+    const mode = state.refMode || 'ext_domains';
+    const includeNoise = Boolean(state.refIncludeNoise);
+    const q = (state.refQuery || '').toLowerCase().trim();
+    const metricVal = r => (includeNoise ? Number(r.requests || 0) : Number(r.human_ok_requests || 0));
+
+    if (mode === 'ext_domains') {
+      thead.innerHTML = '<tr><th>Referrer Domain</th><th class="num">Human 2xx/3xx</th><th class="num">Total Hits</th><th class="num">Share</th></tr>';
+      const rows = (DATA.ext_ref_domains || [])
+        .filter(r => metricVal(r) > 0 && (!q || String(r.domain || '').toLowerCase().includes(q)))
+        .sort((a, b) => metricVal(b) - metricVal(a) || Number(b.requests || 0) - Number(a.requests || 0));
+      const totalMetric = rows.reduce((acc, r) => acc + metricVal(r), 0) || 1;
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;">No matching external referrer domains.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const share = ((metricVal(r) / totalMetric) * 100).toFixed(1);
+        return `
+          <tr>
+            <td class="mono truncate-cell" title="${escapeHtml(r.domain)}">${escapeHtml(r.domain)}</td>
+            <td class="num">${fmtNumber(r.human_ok_requests)}</td>
+            <td class="num">${fmtNumber(r.requests)}</td>
+            <td class="num">${share}%</td>
+          </tr>
+        `;
+      }).join('');
+    } else if (mode === 'ext_urls') {
+      thead.innerHTML = '<tr><th>Referrer URL</th><th class="num">Human 2xx/3xx</th><th class="num">Total Hits</th></tr>';
+      const rows = (DATA.ext_ref_urls || [])
+        .filter(r => metricVal(r) > 0 && (!q || String(r.url || '').toLowerCase().includes(q) || String(r.domain || '').toLowerCase().includes(q)))
+        .sort((a, b) => metricVal(b) - metricVal(a) || Number(b.requests || 0) - Number(a.requests || 0));
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#94a3b8;">No matching external referrer URLs.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const originTag = r.is_origin_fallback ? ' <span class="badge badge-method">Origin</span>' : '';
+        return `
+          <tr>
+            <td class="mono truncate-cell" title="${escapeHtml(r.url)}">${escapeHtml(r.url)}${originTag}</td>
+            <td class="num">${fmtNumber(r.human_ok_requests)}</td>
+            <td class="num">${fmtNumber(r.requests)}</td>
+          </tr>
+        `;
+      }).join('');
+    } else if (mode === 'campaigns') {
+      thead.innerHTML = '<tr><th>Source / Medium</th><th>Campaign</th><th>Click ID</th><th class="num">Human 2xx/3xx</th><th class="num">Total Hits</th></tr>';
+      const rows = (DATA.campaigns || [])
+        .filter(r => metricVal(r) > 0 && (!q || `${r.source || ''} ${r.medium || ''} ${r.campaign || ''} ${r.click_type || ''}`.toLowerCase().includes(q)))
+        .sort((a, b) => metricVal(b) - metricVal(a) || Number(b.requests || 0) - Number(a.requests || 0));
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;">No matching UTM or click-ID campaigns.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const srcMed = [r.source || '-', r.medium || '-'].join(' / ');
+        return `
+          <tr>
+            <td class="mono">${escapeHtml(srcMed)}</td>
+            <td>${escapeHtml(r.campaign || '-')}</td>
+            <td>${r.click_type ? `<span class="badge badge-3xx">${escapeHtml(r.click_type)}</span>` : '-'}</td>
+            <td class="num">${fmtNumber(r.human_ok_requests)}</td>
+            <td class="num">${fmtNumber(r.requests)}</td>
+          </tr>
+        `;
+      }).join('');
     } else {
-      tbodyRefs.innerHTML = refs.map(r => `
+      thead.innerHTML = '<tr><th>Internal Referrer URL</th><th class="num">Human 2xx/3xx</th><th class="num">Total Hits</th></tr>';
+      const rows = (DATA.int_ref_urls || [])
+        .filter(r => metricVal(r) > 0 && (!q || String(r.url || '').toLowerCase().includes(q)))
+        .sort((a, b) => metricVal(b) - metricVal(a) || Number(b.requests || 0) - Number(a.requests || 0));
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#94a3b8;">No matching internal self-referrals.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
         <tr>
-          <td class="mono truncate-cell" title="${escapeHtml(r.referer)}">${escapeHtml(r.referer)}</td>
+          <td class="mono truncate-cell" title="${escapeHtml(r.url)}">${escapeHtml(r.url)}</td>
+          <td class="num">${fmtNumber(r.human_ok_requests)}</td>
           <td class="num">${fmtNumber(r.requests)}</td>
         </tr>
       `).join('');
@@ -892,6 +1003,31 @@
       const ipSearch = document.getElementById('search-ips');
       if (ipSearch) {
         ipSearch.addEventListener('input', e => renderIpsTable(e.target.value));
+      }
+
+      document.querySelectorAll('[data-ref-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-ref-mode]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.refMode = btn.dataset.refMode || 'ext_domains';
+          renderReferrersTable();
+        });
+      });
+
+      const refSearch = document.getElementById('search-referrers');
+      if (refSearch) {
+        refSearch.addEventListener('input', e => {
+          state.refQuery = e.target.value;
+          renderReferrersTable();
+        });
+      }
+
+      const refNoiseToggle = document.getElementById('toggle-ref-noise');
+      if (refNoiseToggle) {
+        refNoiseToggle.addEventListener('change', e => {
+          state.refIncludeNoise = Boolean(e.target.checked);
+          renderReferrersTable();
+        });
       }
 
       document.body.addEventListener('click', e => {

@@ -405,16 +405,44 @@ sub _prepare_vhost_rankings {
     @ips = sort { ($b->{requests} <=> $a->{requests}) || ($a->{client_ip} cmp $b->{client_ip}) } @ips;
     splice(@ips, 100) if @ips > 100;
 
-    # Top Referrers
+    # Top Referrers (legacy raw list)
     my @referrers;
-    for my $ref (keys %{ $vh->{referrers} || {} }) {
+    for my $ref ( keys %{ $vh->{referrers} || {} } ) {
         push @referrers, {
             referer  => $ref,
             requests => $vh->{referrers}{$ref},
         };
     }
     @referrers = sort { $b->{requests} <=> $a->{requests} } @referrers;
-    splice(@referrers, 50) if @referrers > 50;
+    splice( @referrers, 50 ) if @referrers > 50;
+
+    # External Referrer Domains
+    my @ext_ref_domains = sort {
+        ( $b->{human_ok_requests} || 0 ) <=> ( $a->{human_ok_requests} || 0 )
+            || ( $b->{requests} || 0 ) <=> ( $a->{requests} || 0 )
+    } values %{ $vh->{ext_ref_domains} || {} };
+    splice( @ext_ref_domains, 100 ) if @ext_ref_domains > 100;
+
+    # External Referrer URLs
+    my @ext_ref_urls = sort {
+        ( $b->{human_ok_requests} || 0 ) <=> ( $a->{human_ok_requests} || 0 )
+            || ( $b->{requests} || 0 ) <=> ( $a->{requests} || 0 )
+    } values %{ $vh->{ext_ref_urls} || {} };
+    splice( @ext_ref_urls, 100 ) if @ext_ref_urls > 100;
+
+    # Internal Referrer URLs
+    my @int_ref_urls = sort {
+        ( $b->{human_ok_requests} || 0 ) <=> ( $a->{human_ok_requests} || 0 )
+            || ( $b->{requests} || 0 ) <=> ( $a->{requests} || 0 )
+    } values %{ $vh->{int_ref_urls} || {} };
+    splice( @int_ref_urls, 50 ) if @int_ref_urls > 50;
+
+    # Campaign / UTM / Click-ID Attribution
+    my @campaigns = sort {
+        ( $b->{human_ok_requests} || 0 ) <=> ( $a->{human_ok_requests} || 0 )
+            || ( $b->{requests} || 0 ) <=> ( $a->{requests} || 0 )
+    } values %{ $vh->{campaigns} || {} };
+    splice( @campaigns, 50 ) if @campaigns > 50;
 
     # UA Categories
     my @ua_cats;
@@ -473,15 +501,19 @@ sub _prepare_vhost_rankings {
     splice(@err_ips, 50) if @err_ips > 50;
 
     return {
-        endpoints     => \@endpoints,
-        methods       => \@methods,
-        ips           => \@ips,
-        referrers     => \@referrers,
-        ua_categories => \@ua_cats,
-        ua_families   => \@ua_fams,
-        error_codes   => \@err_codes,
-        error_urls    => \@err_urls,
-        error_ips     => \@err_ips,
+        endpoints       => \@endpoints,
+        methods         => \@methods,
+        ips             => \@ips,
+        referrers       => \@referrers,
+        ext_ref_domains => \@ext_ref_domains,
+        ext_ref_urls    => \@ext_ref_urls,
+        int_ref_urls    => \@int_ref_urls,
+        campaigns       => \@campaigns,
+        ua_categories   => \@ua_cats,
+        ua_families     => \@ua_fams,
+        error_codes     => \@err_codes,
+        error_urls      => \@err_urls,
+        error_ips       => \@err_ips,
     };
 }
 
@@ -491,18 +523,22 @@ sub _write_vhost_chart_page {
     my $name_html = _escape_html($v_meta->{name});
     my $rankings  = _prepare_vhost_rankings($vh);
 
+    my @chart_ext_domains = @{ $rankings->{ext_ref_domains} || [] };
+    splice( @chart_ext_domains, 15 ) if @chart_ext_domains > 15;
+
     my $payload = {
-        page_type     => 'vhost_charts',
-        generated_at  => $generated_at,
-        name          => $v_meta->{name},
-        slug          => $slug,
-        first_seen    => $v_meta->{first_seen},
-        last_seen     => $v_meta->{last_seen},
-        unique_ips    => $v_meta->{unique_ips},
-        hourly        => $vh->{hourly} || {},
-        methods       => $rankings->{methods},
-        ua_categories => $rankings->{ua_categories},
-        error_codes   => $rankings->{error_codes},
+        page_type       => 'vhost_charts',
+        generated_at    => $generated_at,
+        name            => $v_meta->{name},
+        slug            => $slug,
+        first_seen      => $v_meta->{first_seen},
+        last_seen       => $v_meta->{last_seen},
+        unique_ips      => $v_meta->{unique_ips},
+        hourly          => $vh->{hourly} || {},
+        methods         => $rankings->{methods},
+        ua_categories   => $rankings->{ua_categories},
+        error_codes     => $rankings->{error_codes},
+        ext_ref_domains => \@chart_ext_domains,
     };
 
     my $json_str = _encode_embedded_json($payload);
@@ -621,6 +657,18 @@ sub _write_vhost_chart_page {
     <div class="panel-card">
       <div class="panel-header">
         <div>
+          <h3 class="panel-title">Top External Referrer Domains</h3>
+          <p class="panel-subtitle">Human 2xx/3xx referrals by external domain (including Origin header fallbacks)</p>
+        </div>
+      </div>
+      <div class="chart-container chart-md">
+        <canvas id="chart-vh-referrers"></canvas>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-header">
+        <div>
           <h3 class="panel-title">Traffic &amp; HTTP Status Timeline</h3>
           <p class="panel-subtitle">Hourly or daily status code progression, bandwidth, and bot activity</p>
         </div>
@@ -692,21 +740,25 @@ sub _write_vhost_details_page {
     my $rankings  = _prepare_vhost_rankings($vh);
 
     my $payload = {
-        page_type     => 'vhost_details',
-        generated_at  => $generated_at,
-        name          => $v_meta->{name},
-        slug          => $slug,
-        first_seen    => $v_meta->{first_seen},
-        last_seen     => $v_meta->{last_seen},
-        unique_ips    => $v_meta->{unique_ips},
-        endpoints     => $rankings->{endpoints},
-        methods       => $rankings->{methods},
-        ips           => $rankings->{ips},
-        referrers     => $rankings->{referrers},
-        ua_families   => $rankings->{ua_families},
-        error_urls    => $rankings->{error_urls},
-        error_ips     => $rankings->{error_ips},
-        recent_logs   => $vh->{recent_logs} || [],
+        page_type       => 'vhost_details',
+        generated_at    => $generated_at,
+        name            => $v_meta->{name},
+        slug            => $slug,
+        first_seen      => $v_meta->{first_seen},
+        last_seen       => $v_meta->{last_seen},
+        unique_ips      => $v_meta->{unique_ips},
+        endpoints       => $rankings->{endpoints},
+        methods         => $rankings->{methods},
+        ips             => $rankings->{ips},
+        referrers       => $rankings->{referrers},
+        ext_ref_domains => $rankings->{ext_ref_domains},
+        ext_ref_urls    => $rankings->{ext_ref_urls},
+        int_ref_urls    => $rankings->{int_ref_urls},
+        campaigns       => $rankings->{campaigns},
+        ua_families     => $rankings->{ua_families},
+        error_urls      => $rankings->{error_urls},
+        error_ips       => $rankings->{error_ips},
+        recent_logs     => $vh->{recent_logs} || [],
     };
 
     my $json_str = _encode_embedded_json($payload);
@@ -849,16 +901,33 @@ sub _write_vhost_details_page {
 
           <div class="panel-header mt-md">
             <div>
-              <h3 class="panel-title">Top HTTP Referrers</h3>
-              <p class="panel-subtitle">External and internal referring URLs</p>
+              <h3 class="panel-title">Referrals &amp; Campaigns</h3>
+              <p class="panel-subtitle">External domains, referring URLs, UTM/click-ID campaigns, and internal navigation</p>
+            </div>
+            <div class="ref-controls">
+              <div class="btn-group" role="group" aria-label="Referrer view mode">
+                <button type="button" class="btn-chip active" data-ref-mode="ext_domains">External Domains</button>
+                <button type="button" class="btn-chip" data-ref-mode="ext_urls">External URLs</button>
+                <button type="button" class="btn-chip" data-ref-mode="campaigns">Campaigns</button>
+                <button type="button" class="btn-chip" data-ref-mode="internal">Internal</button>
+              </div>
+              <div class="ref-filter-row">
+                <input type="search" id="search-referrers" class="text-input" placeholder="Filter domains, URLs, or campaigns...">
+                <label class="toggle-check">
+                  <input type="checkbox" id="toggle-ref-noise">
+                  <span>Include Bot &amp; 4xx/5xx Probe Referrers</span>
+                </label>
+              </div>
             </div>
           </div>
           <div class="table-responsive">
             <table class="data-table compact">
-              <thead>
+              <thead id="thead-vh-referrers">
                 <tr>
-                  <th>Referrer URL</th>
-                  <th class="num">Requests</th>
+                  <th>Referrer Domain</th>
+                  <th class="num">Human 2xx/3xx</th>
+                  <th class="num">Total Hits</th>
+                  <th class="num">Share</th>
                 </tr>
               </thead>
               <tbody id="tbody-vh-referrers"></tbody>
