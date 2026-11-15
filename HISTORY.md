@@ -1,5 +1,15 @@
 # History
 
+## 2026-11-15 - Move Fail2ban Panel Below Visual Charts on Main Page
+
+- Updated `lib/ApacheLog/ReportBuilder.pm` so the Fail2ban Apache Protection Status panel renders below the main comparison charts (`chart-compare-timeline`, `chart-compare-share`, `chart-compare-status`) on `output/index.html`.
+
+## 2026-11-15 - Display Fail2ban Apache Jail Status on Main Overview Page
+
+- Added `_run_fail2ban_cmd`, `_parse_fail2ban_jail_list`, `_parse_fail2ban_jail_status`, and `_collect_fail2ban_apache_status` in `lib/ApacheLog/ReportBuilder.pm` to capture active Apache fail2ban jail failure/ban counts and banned IP lists during report generation.
+- Added a prominent **Fail2ban Apache Protection Status** panel directly beneath the KPI summary cards on `output/index.html` (`ReportBuilder.pm`, `assets/report.js`, `assets/report.css`).
+- Added unit tests in `t/02-static-builder.t` covering fail2ban jail list/status parsing and `index.html` payload rendering.
+
 ## 2026-11-14 - Classify and Filter Page/API vs. Image, CSS/JS, and File Requests
 
 - Added `classify_path_type` in `lib/ApacheLog/Parser.pm` to tag every parsed request as `page`, `image`, `asset` (CSS/JS/fonts/maps), or `file` (PDF/media/data/text).

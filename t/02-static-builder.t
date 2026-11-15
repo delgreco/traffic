@@ -144,4 +144,43 @@ like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains 
     like( $alpha_chart_html, qr/id="chart-vh-path-types"/, 'Chart HTML includes Content Types canvas' );
 }
 
+# 7. Verify Fail2ban Apache jail status parsing and main-page embedding
+{
+    my @jails = ApacheLog::ReportBuilder::_parse_fail2ban_jail_list(
+        "Status\n|- Number of jail:\t5\n`- Jail list:\tapache-auth, apache-badbots, apache-noscript, apache-probes, sshd\n"
+    );
+    is_deeply( \@jails, [qw( apache-auth apache-badbots apache-noscript apache-probes )], 'Filtered only Apache jails from fail2ban jail list' );
+
+    my $parsed_jail = ApacheLog::ReportBuilder::_parse_fail2ban_jail_status(
+        'apache-probes',
+        "Status for the jail: apache-probes\n|- Filter\n|  |- Currently failed:\t2\n|  |- Total failed:\t18\n|  `- File list:\t/var/log/apache2/access.log /var/log/apache2/other_vhosts_access.log\n`- Actions\n   |- Currently banned:\t1\n   |- Total banned:\t4\n   `- Banned IP list:\t185.176.255.79\n"
+    );
+    is( $parsed_jail->{currently_failed}, 2, 'Parsed currently_failed' );
+    is( $parsed_jail->{total_failed}, 18, 'Parsed total_failed' );
+    is( $parsed_jail->{currently_banned}, 1, 'Parsed currently_banned' );
+    is( $parsed_jail->{total_banned}, 4, 'Parsed total_banned' );
+    is_deeply( $parsed_jail->{banned_ips}, ['185.176.255.79'], 'Parsed banned_ips' );
+    is( $parsed_jail->{watched_files}, 2, 'Parsed watched file count' );
+
+    ApacheLog::ReportBuilder->new(
+        store      => $store,
+        output_dir => $output_dir,
+        fail2ban   => {
+            available              => 1,
+            collected_at           => '2026-11-15 18:00:00 UTC',
+            total_currently_banned => 1,
+            total_banned           => 4,
+            total_failed           => 18,
+            jails                  => [ $parsed_jail ],
+        },
+    )->build_all();
+
+    open my $f2b_idx_fh, '<:encoding(UTF-8)', "$output_dir/index.html" or die $!;
+    my $f2b_idx_html = do { local $/; <$f2b_idx_fh> };
+    close $f2b_idx_fh;
+    like( $f2b_idx_html, qr/id="tbody-fail2ban-jails"/, 'index.html renders Fail2ban Apache Protection panel' );
+    like( $f2b_idx_html, qr/"jail":"apache-probes"/, 'index.html embeds fail2ban jail JSON payload' );
+    like( $f2b_idx_html, qr/185\.176\.255\.79/, 'index.html embeds banned IP list for Apache jails' );
+}
+
 done_testing();

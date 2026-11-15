@@ -21,6 +21,7 @@ sub new {
         config     => $config,
         output_dir => $output_dir,
         assets_src => $assets_src,
+        fail2ban   => $args{fail2ban},
     }, $class;
 }
 
@@ -152,6 +153,136 @@ sub _render_nav_options {
     return join( "\n          ", @opts );
 }
 
+=head2 _run_fail2ban_cmd
+
+Executes C<fail2ban-client> safely using list-form open, using C<sudo -n> when not running as root.
+
+=cut
+
+sub _run_fail2ban_cmd {
+    my ( @args ) = @_;
+    my @cmd = ( $> == 0 ) ? ( 'fail2ban-client', @args ) : ( 'sudo', '-n', 'fail2ban-client', @args );
+    my $pid = open( my $fh, '-|' );
+    return ( 0, '' ) if ! defined $pid;
+
+    if ( $pid == 0 ) {
+        open STDERR, '>', '/dev/null';
+        {
+            no warnings 'exec';
+            exec @cmd;
+        }
+        POSIX::_exit( 127 );
+    }
+
+    local $/;
+    my $out = <$fh>;
+    close $fh;
+    my $ok = ( $? == 0 ) ? 1 : 0;
+    return ( $ok, defined $out ? $out : '' );
+}
+
+=head2 _parse_fail2ban_jail_list
+
+Parses active jail names from C<fail2ban-client status> output and filters for Apache jails.
+
+=cut
+
+sub _parse_fail2ban_jail_list {
+    my ( $output ) = @_;
+    return () unless defined $output && $output =~ /Jail list:\s*(.+)/m;
+    my $raw = $1;
+    my @jails = grep { /^[A-Za-z0-9_.-]+$/ && /^(?:apache|httpd)[-_]/i }
+        split /[\s,]+/, $raw;
+    return sort @jails;
+}
+
+=head2 _parse_fail2ban_jail_status
+
+Parses failure counts, ban counts, file counts, and active banned IPs from C<fail2ban-client status E<lt>jailE<gt>>.
+
+=cut
+
+sub _parse_fail2ban_jail_status {
+    my ( $jail, $output ) = @_;
+    $output //= '';
+    my ( $curr_fail ) = ( $output =~ /Currently failed:\s*(\d+)/ );
+    my ( $tot_fail )  = ( $output =~ /Total failed:\s*(\d+)/ );
+    my ( $curr_ban )  = ( $output =~ /Currently banned:\s*(\d+)/ );
+    my ( $tot_ban )   = ( $output =~ /Total banned:\s*(\d+)/ );
+
+    my @ips;
+    if ( $output =~ /Banned IP list:\s*(.*)/m ) {
+        my $raw_ips = $1;
+        @ips = grep { length $_ } split /\s+/, $raw_ips;
+    }
+
+    my @files;
+    if ( $output =~ /File list:\s*(.*)/m ) {
+        my $raw_files = $1;
+        @files = grep { length $_ } split /\s+/, $raw_files;
+    }
+
+    return {
+        jail             => $jail,
+        currently_failed => int( $curr_fail || 0 ),
+        total_failed     => int( $tot_fail  || 0 ),
+        currently_banned => int( $curr_ban  || 0 ),
+        total_banned     => int( $tot_ban   || 0 ),
+        banned_ips       => \@ips,
+        watched_files    => scalar( @files ),
+    };
+}
+
+=head2 _collect_fail2ban_apache_status
+
+Collects the latest Fail2ban status for all active Apache jails for embedding on the main dashboard.
+
+=cut
+
+sub _collect_fail2ban_apache_status {
+    my ( $self, $generated_at ) = @_;
+    if ( defined $self->{fail2ban} && ref( $self->{fail2ban} ) eq 'HASH' ) {
+        return $self->{fail2ban};
+    }
+
+    my ( $ok, $list_out ) = _run_fail2ban_cmd( 'status' );
+    if ( ! $ok ) {
+        return {
+            available              => 0,
+            collected_at           => $generated_at,
+            jails                  => [],
+            total_currently_banned => 0,
+            total_banned           => 0,
+            total_failed           => 0,
+            note                   => 'Live fail2ban status unavailable (run build_reports.pl as root or allow passwordless sudo for fail2ban-client status).',
+        };
+    }
+
+    my @apache_jails = _parse_fail2ban_jail_list( $list_out );
+    my @jails;
+    my ( $sum_cb, $sum_tb, $sum_tf ) = ( 0, 0, 0 );
+
+    for my $jail ( @apache_jails ) {
+        my ( $j_ok, $j_out ) = _run_fail2ban_cmd( 'status', $jail );
+        next unless $j_ok;
+        my $rec = _parse_fail2ban_jail_status( $jail, $j_out );
+        $sum_cb += $rec->{currently_banned};
+        $sum_tb += $rec->{total_banned};
+        $sum_tf += $rec->{total_failed};
+        push @jails, $rec;
+    }
+
+    return {
+        available              => 1,
+        collected_at           => $generated_at,
+        jails                  => \@jails,
+        total_currently_banned => $sum_cb,
+        total_banned           => $sum_tb,
+        total_failed           => $sum_tf,
+        note                   => '',
+    };
+}
+
 sub _write_index_page {
     my ($self, $vhost_list, $vhosts_map, $min_ts, $max_ts, $generated_at) = @_;
 
@@ -170,12 +301,15 @@ sub _write_index_page {
         };
     }
 
+    my $fail2ban = $self->_collect_fail2ban_apache_status( $generated_at );
+
     my $payload = {
         page_type    => 'compare',
         generated_at => $generated_at,
         min_ts       => $min_ts,
         max_ts       => $max_ts,
         vhosts       => \@compare_vhosts,
+        fail2ban     => $fail2ban,
     };
 
     my $json_str = _encode_embedded_json($payload);
@@ -323,6 +457,33 @@ sub _write_index_page {
         <div class="chart-container chart-md">
           <canvas id="chart-compare-status"></canvas>
         </div>
+      </div>
+    </div>
+
+    <div class="panel-card f2b-panel">
+      <div class="panel-header">
+        <div>
+          <h3 class="panel-title">Fail2ban Apache Protection Status</h3>
+          <p class="panel-subtitle" id="f2b-subtitle">Live jail failure and IP ban counters captured at report build time</p>
+        </div>
+        <div class="f2b-meta">
+          <span id="f2b-summary-badge" class="badge badge-method">Loading…</span>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table compact">
+          <thead>
+            <tr>
+              <th>Apache Jail</th>
+              <th class="num">Currently Failed</th>
+              <th class="num">Total Failed</th>
+              <th class="num">Currently Banned</th>
+              <th class="num">Total Banned</th>
+              <th>Active Banned IPs</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-fail2ban-jails"></tbody>
+        </table>
       </div>
     </div>
 

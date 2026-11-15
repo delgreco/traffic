@@ -280,6 +280,57 @@
     };
   }
 
+  function renderFail2banPanel() {
+    const badge = document.getElementById('f2b-summary-badge');
+    const sub = document.getElementById('f2b-subtitle');
+    const tbody = document.getElementById('tbody-fail2ban-jails');
+    if (!badge || !tbody) return;
+
+    const f2b = DATA.fail2ban || {};
+    const jails = f2b.jails || [];
+    if (sub && f2b.collected_at) {
+      sub.textContent = `Latest Apache jail counters captured at ${f2b.collected_at}`;
+    }
+
+    if (!f2b.available) {
+      badge.className = 'badge badge-4xx';
+      badge.textContent = 'Unavailable';
+      const msg = f2b.note || 'Live fail2ban status unavailable during this build.';
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center-muted">${escapeHtml(msg)}</td></tr>`;
+      return;
+    }
+
+    if (!jails.length) {
+      badge.className = 'badge badge-4xx';
+      badge.textContent = '0 Apache Jails Active';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center-muted">No active Apache jails reported by fail2ban-client.</td></tr>';
+      return;
+    }
+
+    const currBan = Number(f2b.total_currently_banned || 0);
+    const totBan = Number(f2b.total_banned || 0);
+    badge.className = `badge ${currBan > 0 ? 'badge-5xx' : 'badge-2xx'}`;
+    badge.textContent = `${jails.length} Apache Jails • ${fmtNumber(currBan)} Active Bans • ${fmtNumber(totBan)} Total Bans`;
+
+    tbody.innerHTML = jails.map(j => {
+      const ips = j.banned_ips || [];
+      const ipHtml = ips.length
+        ? `<div class="ip-pills">${ips.map(ip => `<span class="ip-pill">${escapeHtml(ip)}</span>`).join('')}</div>`
+        : '<span class="text-center-muted">None</span>';
+      const cb = Number(j.currently_banned || 0);
+      return `
+        <tr>
+          <td class="mono"><strong>${escapeHtml(j.jail)}</strong></td>
+          <td class="num">${fmtNumber(j.currently_failed)}</td>
+          <td class="num">${fmtNumber(j.total_failed)}</td>
+          <td class="num"><span class="badge ${cb > 0 ? 'badge-5xx' : 'badge-2xx'}">${fmtNumber(cb)}</span></td>
+          <td class="num">${fmtNumber(j.total_banned)}</td>
+          <td>${ipHtml}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   function renderComparePage() {
     const computed = computeCompareDataset();
     const k = computed.kpis;
@@ -293,6 +344,8 @@
     document.getElementById('cmp-kpi-err-rate').textContent = `${k.error_rate_pct.toFixed(2)}%`;
     document.getElementById('cmp-kpi-5xx-count').textContent = `${fmtNumber(k.error_5xx_count)} server (5xx) errors`;
     document.getElementById('cmp-kpi-bot-pct').textContent = `${k.bot_pct.toFixed(1)}%`;
+
+    renderFail2banPanel();
 
     // 1. Timeline Chart
     destroyChart('compareTimeline');

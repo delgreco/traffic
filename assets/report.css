@@ -613,3 +613,36 @@ a {
     flex: 1 1 200px;
   }
 }
+
+/* Fail2ban Status Panel */
+.f2b-panel {
+  border-left: 3px solid var(--accent-primary);
+}
+
+.f2b-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ip-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ip-pill {
+  display: inline-block;
+  padding: 0.14rem 0.45rem;
+  font-size: 0.74rem;
+  font-family: var(--font-mono);
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+}
+
+.text-center-muted {
+  text-align: center;
+  color: var(--text-muted);
+}
