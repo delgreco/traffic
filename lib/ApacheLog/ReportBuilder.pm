@@ -417,10 +417,11 @@ sub _write_index_page {
       <div class="panel-header">
         <div>
           <h3 class="panel-title">Virtual Host Traffic Over Time</h3>
-          <p class="panel-subtitle">Compare requests, bandwidth, and error volume across virtual hosts</p>
+          <p class="panel-subtitle">Compare 2xx requests, 3xx redirects, bandwidth, and error volume across virtual hosts</p>
         </div>
         <div class="btn-group" role="group" aria-label="Timeline metric toggle">
-          <button type="button" class="btn-chip active" data-cmp-metric="requests">Requests</button>
+          <button type="button" class="btn-chip active" data-cmp-metric="requests">Requests (2xx)</button>
+          <button type="button" class="btn-chip" data-cmp-metric="redirects">3xx Redirects</button>
           <button type="button" class="btn-chip" data-cmp-metric="bytes">Bandwidth</button>
           <button type="button" class="btn-chip" data-cmp-metric="errors">4xx/5xx Errors</button>
         </div>
@@ -438,7 +439,8 @@ sub _write_index_page {
             <p class="panel-subtitle">Proportional split across active virtual hosts</p>
           </div>
           <div class="btn-group" role="group" aria-label="Share metric toggle">
-            <button type="button" class="btn-chip active" data-share-metric="requests">Requests</button>
+            <button type="button" class="btn-chip active" data-share-metric="status_2xx">Requests (2xx)</button>
+            <button type="button" class="btn-chip" data-share-metric="requests">All Requests</button>
             <button type="button" class="btn-chip" data-share-metric="bytes">Bandwidth</button>
           </div>
         </div>

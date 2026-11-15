@@ -147,6 +147,7 @@ a {
 
 .btn-group {
   display: inline-flex;
+  flex-wrap: wrap;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);

@@ -14,7 +14,7 @@
     endTs: null,
     granularity: 'auto',
     compareMetric: 'requests',
-    shareMetric: 'requests',
+    shareMetric: 'status_2xx',
     vhostChartMode: 'status',
     epTypeFilter: 'page',
     epQuery: '',
@@ -219,9 +219,10 @@
         const bucketKey = gran === 'day' ? (hb - (hb % 86400)) : hb;
         bucketsSet.add(bucketKey);
         if (!bMap[bucketKey]) {
-          bMap[bucketKey] = { requests: 0, bytes: 0, errors: 0 };
+          bMap[bucketKey] = { requests: 0, redirects: 0, bytes: 0, errors: 0 };
         }
-        bMap[bucketKey].requests += stats.requests || 0;
+        bMap[bucketKey].requests += stats.status_2xx || 0;
+        bMap[bucketKey].redirects += stats.status_3xx || 0;
         bMap[bucketKey].bytes += stats.bytes || 0;
         bMap[bucketKey].errors += (stats.status_4xx || 0) + (stats.status_5xx || 0);
       }

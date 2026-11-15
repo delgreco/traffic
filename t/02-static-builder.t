@@ -181,6 +181,10 @@ like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains 
     like( $f2b_idx_html, qr/id="tbody-fail2ban-jails"/, 'index.html renders Fail2ban Apache Protection panel' );
     like( $f2b_idx_html, qr/"jail":"apache-probes"/, 'index.html embeds fail2ban jail JSON payload' );
     like( $f2b_idx_html, qr/185\.176\.255\.79/, 'index.html embeds banned IP list for Apache jails' );
+    like( $f2b_idx_html, qr/data-cmp-metric="requests"[^>]*>Requests \(2xx\)</, 'index.html defaults Traffic Over Time Requests toggle to 2xx' );
+    like( $f2b_idx_html, qr/data-cmp-metric="redirects"[^>]*>3xx Redirects</, 'index.html includes 3xx Redirects toggle in Traffic Over Time' );
+    like( $f2b_idx_html, qr/class="btn-chip active"[^>]*data-share-metric="status_2xx"[^>]*>Requests \(2xx\)</, 'index.html defaults Traffic Share chart to 2xx requests' );
+    like( $f2b_idx_html, qr/data-share-metric="requests"[^>]*>All Requests</, 'index.html includes All Requests toggle in Traffic Share chart' );
 }
 
 done_testing();

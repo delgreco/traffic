@@ -1,5 +1,15 @@
 # History
 
+## 2026-11-15 - Default Traffic Share by Virtual Host Chart to 2xx Requests With All Requests Toggle
+
+- Updated `lib/ApacheLog/ReportBuilder.pm` (`_write_index_page`) and `assets/report.js` (`state.shareMetric`) so the **Traffic Share by Virtual Host** doughnut chart defaults to **Requests (2xx)** (`status_2xx`) and offers **All Requests** (`requests`) and **Bandwidth** (`bytes`) toggles.
+- Added assertions in `t/02-static-builder.t` verifying both Traffic Share toggle buttons in `index.html`.
+
+## 2026-11-15 - Split Virtual Host Traffic Over Time Requests Into 2xx Default and 3xx Redirects Filter
+
+- Updated `lib/ApacheLog/ReportBuilder.pm` (`_write_index_page`) and `assets/report.js` (`computeCompareDataset`) so the default **Requests (2xx)** timeline view on `Virtual Host Traffic Over Time` (`chart-compare-timeline`) plots only `status_2xx` requests while adding a dedicated **3xx Redirects** (`redirects`) filter toggle for `status_3xx`.
+- Added `flex-wrap: wrap` to `.btn-group` in `assets/report.css` so the timeline toggle chips wrap cleanly on mobile screens, and added assertions in `t/02-static-builder.t`.
+
 ## 2026-11-15 - Move Fail2ban Panel Below Visual Charts on Main Page
 
 - Updated `lib/ApacheLog/ReportBuilder.pm` so the Fail2ban Apache Protection Status panel renders below the main comparison charts (`chart-compare-timeline`, `chart-compare-share`, `chart-compare-status`) on `output/index.html`.
