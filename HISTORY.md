@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-22 - Label All Data Points and Expand Top External Referrer Domains Chart to Top 25
+
+- Updated `lib/ApacheLog/ReportBuilder.pm` (`_write_vhost_chart_page`) and `assets/report.js` (`renderVhostChartsPage`) to display up to the top 25 human 2xx/3xx external referrer domains (previously 15) and set `autoSkip: false` on the y-axis ticks so every data point is labeled.
+- Added `.chart-xl` (`440px`) and `.chart-xxl` (`640px`) height classes in `assets/report.css` and dynamically matched the container height class to the number of referrer domains so all labels remain legible without overlapping.
+- Added unit tests in `t/02-static-builder.t` verifying the top-25 limit, exclusion of zero-human-ok domains, and `chart-xxl` container class.
+
 ## 2026-11-15 - Default Traffic Share by Virtual Host Chart to 2xx Requests With All Requests Toggle
 
 - Updated `lib/ApacheLog/ReportBuilder.pm` (`_write_index_page`) and `assets/report.js` (`state.shareMetric`) so the **Traffic Share by Virtual Host** doughnut chart defaults to **Requests (2xx)** (`status_2xx`) and offers **All Requests** (`requests`) and **Bandwidth** (`bytes`) toggles.

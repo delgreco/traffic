@@ -737,7 +737,14 @@
     destroyChart('vhReferrers');
     const refCanvas = document.getElementById('chart-vh-referrers');
     if (refCanvas) {
-      const topDomains = (DATA.ext_ref_domains || []).filter(d => (d.human_ok_requests || 0) > 0).slice(0, 15);
+      const topDomains = (DATA.ext_ref_domains || []).filter(d => (d.human_ok_requests || 0) > 0).slice(0, 25);
+      const refContainer = refCanvas.parentElement;
+      if (refContainer) {
+        refContainer.classList.remove('chart-md', 'chart-xl', 'chart-xxl');
+        refContainer.classList.add(
+          topDomains.length > 16 ? 'chart-xxl' : topDomains.length > 8 ? 'chart-xl' : 'chart-md'
+        );
+      }
       const ctxRef = refCanvas.getContext('2d');
       state.charts.vhReferrers = new Chart(ctxRef, {
         type: 'bar',
@@ -756,7 +763,10 @@
           plugins: { legend: { display: false } },
           scales: {
             x: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,0.35)' } },
-            y: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(51,65,85,0.2)' } }
+            y: {
+              ticks: { color: '#cbd5e1', autoSkip: false },
+              grid: { color: 'rgba(51,65,85,0.2)' }
+            }
           }
         }
       });

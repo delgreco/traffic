@@ -719,8 +719,12 @@ sub _write_vhost_chart_page {
     my $name_html = _escape_html($v_meta->{name});
     my $rankings  = _prepare_vhost_rankings($vh);
 
-    my @chart_ext_domains = @{ $rankings->{ext_ref_domains} || [] };
-    splice( @chart_ext_domains, 15 ) if @chart_ext_domains > 15;
+    my @chart_ext_domains = grep { ( $_->{human_ok_requests} || 0 ) > 0 } @{ $rankings->{ext_ref_domains} || [] };
+    splice( @chart_ext_domains, 25 ) if @chart_ext_domains > 25;
+
+    my $ref_chart_class = @chart_ext_domains > 16 ? 'chart-xxl'
+                        : @chart_ext_domains > 8  ? 'chart-xl'
+                        :                           'chart-md';
 
     my $payload = {
         page_type       => 'vhost_charts',
@@ -855,10 +859,10 @@ sub _write_vhost_chart_page {
       <div class="panel-header">
         <div>
           <h3 class="panel-title">Top External Referrer Domains</h3>
-          <p class="panel-subtitle">Human 2xx/3xx referrals by external domain (including Origin header fallbacks)</p>
+          <p class="panel-subtitle">Top 25 human 2xx/3xx referrals by external domain (including Origin header fallbacks)</p>
         </div>
       </div>
-      <div class="chart-container chart-md">
+      <div class="chart-container $ref_chart_class">
         <canvas id="chart-vh-referrers"></canvas>
       </div>
     </div>

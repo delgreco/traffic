@@ -358,6 +358,14 @@ a {
   height: 270px;
 }
 
+.chart-xl {
+  height: 440px;
+}
+
+.chart-xxl {
+  height: 640px;
+}
+
 /* Sub-navigation Tabs */
 .subtabs-bar {
   display: flex;

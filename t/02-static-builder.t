@@ -187,4 +187,35 @@ like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains 
     like( $f2b_idx_html, qr/data-share-metric="requests"[^>]*>All Requests</, 'index.html includes All Requests toggle in Traffic Share chart' );
 }
 
+# 8. Verify Top 25 External Referrer Domains chart limit and container sizing
+{
+    my $top25_log = "$tmp_dir/top25.example.com-access.log";
+    open my $tfh, '>', $top25_log or die $!;
+    for my $i ( 1 .. 28 ) {
+        print {$tfh} qq{10.9.8.$i - - [$ts_recent] "GET / HTTP/1.1" 200 100 "https://ref$i.external.org/" "Mozilla/5.0 Chrome/128.0"\n};
+    }
+    print {$tfh} qq{10.9.8.99 - - [$ts_recent] "GET /missing HTTP/1.1" 404 100 "https://noise.external.org/" "Mozilla/5.0 Chrome/128.0"\n};
+    close $tfh;
+
+    $store->ingest_file(
+        $top25_log,
+        default_vhost => 'top25.example.com',
+    );
+    ApacheLog::ReportBuilder->new(
+        store      => $store,
+        output_dir => $output_dir,
+    )->build_all();
+
+    open my $t25_fh, '<:encoding(UTF-8)', "$output_dir/vhosts/top25.example.com.html" or die $!;
+    my $t25_html = do { local $/; <$t25_fh> };
+    close $t25_fh;
+
+    like( $t25_html, qr/<div class="chart-container chart-xxl">\s*<canvas id="chart-vh-referrers"><\/canvas>/, 'Chart HTML uses chart-xxl container when > 16 referrer domains' );
+    my ($json_line) = ( $t25_html =~ /window\.REPORT_DATA = (\{.*\});/ );
+    ok( defined $json_line, 'Extracted REPORT_DATA JSON from top25 chart page' );
+    my $chart_data = JSON::PP::decode_json($json_line);
+    is( scalar( @{ $chart_data->{ext_ref_domains} || [] } ), 25, 'Chart HTML embeds top 25 human external referrer domains' );
+    ok( !( grep { $_->{domain} eq 'noise.external.org' } @{ $chart_data->{ext_ref_domains} || [] } ), 'Chart HTML excludes zero-human-ok referrer domains' );
+}
+
 done_testing();
