@@ -236,4 +236,24 @@ like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains 
     ok( !exists $top25_cmp->{hourly}{$first_hb}{methods}, 'index.html compare hourly omits per-hour breakdown maps' );
 }
 
+# 9. Verify configured vhost_colors are embedded in index.html
+{
+    ApacheLog::ReportBuilder->new(
+        store      => $store,
+        config     => { vhost_colors => { 'alpha.example.com' => '#a855f7' } },
+        output_dir => $output_dir,
+    )->build_all();
+
+    open my $vc_fh, '<:encoding(UTF-8)', "$output_dir/index.html" or die $!;
+    my $vc_html = do { local $/; <$vc_fh> };
+    close $vc_fh;
+    my ($vc_json) = ( $vc_html =~ /window\.REPORT_DATA = (\{.*\});/ );
+    my $vc_data = JSON::PP::decode_json($vc_json);
+    is_deeply(
+        $vc_data->{vhost_colors},
+        { 'alpha.example.com' => '#a855f7' },
+        'index.html embeds configured vhost_colors map'
+    );
+}
+
 done_testing();

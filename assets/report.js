@@ -8,6 +8,30 @@
   ];
 
   const DATA = window.REPORT_DATA || {};
+  const vhostColorMap = {};
+
+  function getVhostColor(name) {
+    const pinned = DATA.vhost_colors || {};
+    if (pinned[name]) return pinned[name];
+    if (vhostColorMap[name]) return vhostColorMap[name];
+
+    const usedPinned = new Set(Object.values(pinned).map(c => String(c).toLowerCase()));
+    const availablePalette = VHOST_PALETTE.filter(c => !usedPinned.has(c.toLowerCase()));
+    const palette = availablePalette.length ? availablePalette : VHOST_PALETTE;
+
+    const unpinnedNames = (DATA.vhosts || [])
+      .map(v => v.name)
+      .filter(n => n && !pinned[n])
+      .sort();
+    unpinnedNames.forEach((n, i) => {
+      vhostColorMap[n] = palette[i % palette.length];
+    });
+    if (!vhostColorMap[name]) {
+      const idx = Object.keys(vhostColorMap).length;
+      vhostColorMap[name] = palette[idx % palette.length];
+    }
+    return vhostColorMap[name];
+  }
 
   const state = {
     startTs: null,
@@ -352,8 +376,8 @@
     destroyChart('compareTimeline');
     const metric = state.compareMetric;
     const labels = computed.buckets.map(b => fmtTimestampUTC(b, computed.granularity));
-    const datasets = computed.summaries.map((s, idx) => {
-      const color = VHOST_PALETTE[idx % VHOST_PALETTE.length];
+    const datasets = computed.summaries.map(s => {
+      const color = getVhostColor(s.name);
       const bMap = computed.seriesByVhost[s.slug] || {};
       return {
         label: s.name,
@@ -407,7 +431,7 @@
         labels: computed.summaries.map(s => s.name),
         datasets: [{
           data: computed.summaries.map(s => s[shareM]),
-          backgroundColor: computed.summaries.map((_, i) => VHOST_PALETTE[i % VHOST_PALETTE.length]),
+          backgroundColor: computed.summaries.map(s => getVhostColor(s.name)),
           borderColor: '#1e293b',
           borderWidth: 2
         }]
@@ -461,8 +485,8 @@
       return;
     }
 
-    tbody.innerHTML = computed.summaries.map((v, idx) => {
-      const color = VHOST_PALETTE[idx % VHOST_PALETTE.length];
+    tbody.innerHTML = computed.summaries.map(v => {
+      const color = getVhostColor(v.name);
       const errBadge = v.error_rate_pct >= 5 ? 'badge-5xx' : (v.error_rate_pct >= 1 ? 'badge-4xx' : 'badge-2xx');
       return `
         <tr>

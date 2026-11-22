@@ -317,6 +317,7 @@ sub _write_index_page {
         min_ts       => $min_ts,
         max_ts       => $max_ts,
         vhosts       => \@compare_vhosts,
+        vhost_colors => $self->{config}{vhost_colors} || {},
         fail2ban     => $fail2ban,
     };
 

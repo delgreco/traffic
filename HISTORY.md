@@ -1,5 +1,15 @@
 # History
 
+## 2026-11-22 - Make Per-Vhost Color Overrides Configurable via config/traffic.json
+
+- Added `vhost_colors` in `config/traffic.json` (`"villobotanicals.com": "#a855f7"`) and embedded `vhost_colors` into `index.html` in `lib/ApacheLog/ReportBuilder.pm` (`_write_index_page`).
+- Updated `getVhostColor` in `assets/report.js` to read `DATA.vhost_colors` instead of hardcoding any domain name, excluding pinned colors from the auto-assigned palette for other vhosts.
+- Added a test in `t/02-static-builder.t` verifying configured `vhost_colors` embedding in `index.html`.
+
+## 2026-11-22 - Assign Stable Per-Host Colors on Comparison Page With Purple for villobotanicals.com
+
+- Added `getVhostColor` in `assets/report.js` so each virtual host always keeps a consistent color across time windows in **Virtual Host Traffic Over Time**, **Traffic Share by Virtual Host**, and the comparison table, with `villobotanicals.com` permanently assigned purple (`#a855f7`).
+
 ## 2026-11-22 - Filter All Virtual Host Overview Charts by Selected Time Window
 
 - Updated `lib/ApacheLog/StateStore.pm` to record per-hour `methods`, `ua_categories`, `path_types`, `error_codes`, and human 2xx/3xx `ext_ref_domains` breakdowns inside each vhost `hourly` bucket.
