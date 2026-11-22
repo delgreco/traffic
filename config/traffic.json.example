@@ -5,6 +5,9 @@
   "max_recent_logs_per_vhost": 1000,
   "default_vhost_from_filename": true,
   "filename_vhost_regex": "^(.+?)(?:[-_.]ssl)?(?:[-_.]access)?\\.log",
+  "vhost_colors": {
+    "example.com": "#a855f7"
+  },
   "log_sources": [
     {
       "path": "/var/log/apache2/other_vhosts_access.log*",

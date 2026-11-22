@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-22 - Refresh README With Quick Start, vhost_colors Docs, and Demo Screenshots
+
+- Reorganized `README.md` with **Quick Start** at the top, a configuration reference table documenting `vhost_colors`, and clearer feature/page summaries.
+- Added two sanitized dark-theme UI screenshots (`docs/screenshots/comparison-overview.jpg` and `docs/screenshots/vhost-charts.jpg`) using synthetic example domains.
+- Added an example `vhost_colors` block to `config/traffic.json.example`.
+
 ## 2026-11-22 - Make Per-Vhost Color Overrides Configurable via config/traffic.json
 
 - Added `vhost_colors` in `config/traffic.json` (`"villobotanicals.com": "#a855f7"`) and embedded `vhost_colors` into `index.html` in `lib/ApacheLog/ReportBuilder.pm` (`_write_index_page`).
