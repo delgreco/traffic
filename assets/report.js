@@ -1227,9 +1227,67 @@
     }
   }
 
+  function setupPanelCollapse() {
+    const storageKey = 'apachelog_collapsed_panels';
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+    } catch (_) {
+      saved = {};
+    }
+
+    const pagePrefix = `${DATA.page_type || 'page'}:${DATA.slug || 'global'}`;
+    document.querySelectorAll('.panel-card').forEach((card, idx) => {
+      const header = card.firstElementChild;
+      if (!header || !header.classList.contains('panel-header')) return;
+      if (header.querySelector('.panel-toggle-btn')) return;
+
+      const titleEl = header.querySelector('.panel-title');
+      const titleText = titleEl ? titleEl.textContent.trim() : `Panel ${idx + 1}`;
+      const panelKey = `${pagePrefix}:${titleText}`;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'panel-toggle-btn';
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 6 8 10 12 6"></polyline></svg>';
+
+      const applyState = isCollapsed => {
+        card.classList.toggle('collapsed', isCollapsed);
+        btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        const action = isCollapsed ? 'Expand' : 'Collapse';
+        btn.setAttribute('aria-label', `${action} ${titleText}`);
+        btn.title = `${action} ${titleText}`;
+      };
+
+      applyState(Boolean(saved[panelKey]));
+
+      btn.addEventListener('click', () => {
+        const nextCollapsed = !card.classList.contains('collapsed');
+        applyState(nextCollapsed);
+        if (nextCollapsed) {
+          saved[panelKey] = true;
+        }
+        else {
+          delete saved[panelKey];
+          requestAnimationFrame(() => {
+            Object.values(state.charts).forEach(c => {
+              if (c && typeof c.resize === 'function') c.resize();
+            });
+          });
+        }
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(saved));
+        } catch (_) {}
+      });
+
+      header.appendChild(btn);
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     setupSharedNavigation();
     setupPageInteractions();
     renderCurrentPage();
+    setupPanelCollapse();
   });
 })();

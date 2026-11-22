@@ -1,5 +1,10 @@
 # History
 
+## 2026-11-22 - Add Collapse/Expand Toggle Controls to All Report Panels
+
+- Added `.panel-toggle-btn` and `.panel-card.collapsed` rules in `assets/report.css` so every `.panel-card` across overview, vhost chart, and vhost detail pages collapses cleanly to its header bar without inline CSS.
+- Added `setupPanelCollapse` in `assets/report.js` to inject an accessible chevron toggle button (`aria-expanded`, `aria-label`, `title`) into every `.panel-header`, persist collapsed state per page/panel in `localStorage`, and resize Chart.js canvases when expanding a panel.
+
 ## 2026-11-22 - Label All Data Points and Expand Top External Referrer Domains Chart to Top 25
 
 - Updated `lib/ApacheLog/ReportBuilder.pm` (`_write_vhost_chart_page`) and `assets/report.js` (`renderVhostChartsPage`) to display up to the top 25 human 2xx/3xx external referrer domains (previously 15) and set `autoSkip: false` on the y-axis ticks so every data point is labeled.

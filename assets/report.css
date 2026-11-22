@@ -315,6 +315,45 @@ a {
   margin-bottom: 1rem;
 }
 
+.panel-header > div:first-child {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.panel-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.panel-toggle-btn:hover {
+  color: var(--text-main);
+  border-color: var(--accent-primary);
+}
+
+.panel-card.collapsed > .panel-header {
+  margin-bottom: 0;
+}
+
+.panel-card.collapsed > :not(:first-child) {
+  display: none;
+}
+
+.panel-card.collapsed .panel-toggle-btn {
+  transform: rotate(-90deg);
+}
+
 .panel-title {
   font-size: 1rem;
   font-weight: 600;
