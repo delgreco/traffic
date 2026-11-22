@@ -216,6 +216,24 @@ like( $chart_html, qr/"ext_ref_domains":\[/, 'Chart HTML embeds ext_ref_domains 
     my $chart_data = JSON::PP::decode_json($json_line);
     is( scalar( @{ $chart_data->{ext_ref_domains} || [] } ), 25, 'Chart HTML embeds top 25 human external referrer domains' );
     ok( !( grep { $_->{domain} eq 'noise.external.org' } @{ $chart_data->{ext_ref_domains} || [] } ), 'Chart HTML excludes zero-human-ok referrer domains' );
+
+    my ($first_hb) = sort keys %{ $chart_data->{hourly} || {} };
+    ok( defined $first_hb, 'top25 chart page has hourly bucket' );
+    is( $chart_data->{hourly}{$first_hb}{methods}{GET}, 29, 'Hourly bucket tracks methods breakdown' );
+    is( $chart_data->{hourly}{$first_hb}{ua_categories}{Browser}, 29, 'Hourly bucket tracks ua_categories breakdown' );
+    is( $chart_data->{hourly}{$first_hb}{path_types}{page}, 29, 'Hourly bucket tracks path_types breakdown' );
+    is( $chart_data->{hourly}{$first_hb}{error_codes}{404}, 1, 'Hourly bucket tracks error_codes breakdown' );
+    is( $chart_data->{hourly}{$first_hb}{ext_ref_domains}{'ref1.external.org'}, 1, 'Hourly bucket tracks human ext_ref_domains breakdown' );
+    ok( !exists $chart_data->{hourly}{$first_hb}{ext_ref_domains}{'noise.external.org'}, 'Hourly bucket excludes 404 referrer from human ext_ref_domains' );
+
+    open my $idx_after_fh, '<:encoding(UTF-8)', "$output_dir/index.html" or die $!;
+    my $idx_after_html = do { local $/; <$idx_after_fh> };
+    close $idx_after_fh;
+    my ($idx_json) = ( $idx_after_html =~ /window\.REPORT_DATA = (\{.*\});/ );
+    my $idx_data = JSON::PP::decode_json($idx_json);
+    my ($top25_cmp) = grep { $_->{slug} eq 'top25.example.com' } @{ $idx_data->{vhosts} || [] };
+    ok( defined $top25_cmp, 'Found top25.example.com in index.html compare payload' );
+    ok( !exists $top25_cmp->{hourly}{$first_hb}{methods}, 'index.html compare hourly omits per-hour breakdown maps' );
 }
 
 done_testing();

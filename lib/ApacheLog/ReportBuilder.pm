@@ -289,6 +289,14 @@ sub _write_index_page {
     my @compare_vhosts;
     for my $v (@$vhost_list) {
         my $vh = $vhosts_map->{ $v->{name} };
+        my %hourly_summary;
+        for my $hb ( keys %{ $vh->{hourly} || {} } ) {
+            my $h = $vh->{hourly}{$hb};
+            $hourly_summary{$hb} = {
+                map { $_ => ( $h->{$_} || 0 ) }
+                qw( requests bytes status_2xx status_3xx status_4xx status_5xx bot_requests human_requests )
+            };
+        }
         push @compare_vhosts, {
             name         => $v->{name},
             slug         => $v->{slug},
@@ -297,7 +305,7 @@ sub _write_index_page {
             unique_ips   => $v->{unique_ips},
             chart_href   => "vhosts/$v->{slug}.html",
             details_href => "vhosts/$v->{slug}-details.html",
-            hourly       => $vh->{hourly} || {},
+            hourly       => \%hourly_summary,
         };
     }
 

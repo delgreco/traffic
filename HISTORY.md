@@ -1,5 +1,11 @@
 # History
 
+## 2026-11-22 - Filter All Virtual Host Overview Charts by Selected Time Window
+
+- Updated `lib/ApacheLog/StateStore.pm` to record per-hour `methods`, `ua_categories`, `path_types`, `error_codes`, and human 2xx/3xx `ext_ref_domains` breakdowns inside each vhost `hourly` bucket.
+- Updated `lib/ApacheLog/ReportBuilder.pm` (`_write_index_page`) to keep `index.html` hourly rollups compact while embedding full hourly breakdowns in vhost chart pages.
+- Updated `assets/report.js` (`renderVhostChartsPage`) to aggregate those hourly breakdowns across the active Time Window (`startTs`–`endTs`) with fallback to all-time totals for legacy state files, and added assertions in `t/02-static-builder.t`.
+
 ## 2026-11-22 - Add Collapse/Expand Toggle Controls to All Report Panels
 
 - Added `.panel-toggle-btn` and `.panel-card.collapsed` rules in `assets/report.css` so every `.panel-card` across overview, vhost chart, and vhost detail pages collapses cleanly to its header bar without inline CSS.

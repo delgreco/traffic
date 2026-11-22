@@ -494,14 +494,34 @@
   // ===========================================================================
   // PAGE TYPE 2: SINGLE VIRTUAL HOST CHARTS VIEW (vhosts/<slug>.html)
   // ===========================================================================
+  function mergeCounts(target, source) {
+    if (!source) return;
+    for (const [k, v] of Object.entries(source)) {
+      target[k] = (target[k] || 0) + (v || 0);
+    }
+  }
+
+  function hasHourlyBreakdown(hourly, key) {
+    return Object.values(hourly).some(s => s && s[key]);
+  }
+
   function renderVhostChartsPage() {
     const hourly = DATA.hourly || {};
     const startHour = state.startTs ? state.startTs - (state.startTs % 3600) : 0;
     const endHour = state.endTs || Number.MAX_SAFE_INTEGER;
     const gran = resolveGranularity();
+    const isFullRange =
+      (!state.startTs || state.startTs <= (DATA.first_seen || 0)) &&
+      (!state.endTs || state.endTs >= (DATA.last_seen || 0));
+    const useHourly = key => !isFullRange && hasHourlyBreakdown(hourly, key);
 
     let reqs = 0, bytes = 0, s2xx = 0, s3xx = 0, s4xx = 0, s5xx = 0, bots = 0, humans = 0;
     const bucketMap = {};
+    const methodCounts = {};
+    const uaCatCounts = {};
+    const pathTypeCounts = {};
+    const errorCodeCounts = {};
+    const extRefCounts = {};
 
     for (const [hbStr, stats] of Object.entries(hourly)) {
       const hb = Number(hbStr);
@@ -515,6 +535,12 @@
       s5xx += stats.status_5xx || 0;
       bots += stats.bot_requests || 0;
       humans += stats.human_requests || 0;
+
+      mergeCounts(methodCounts, stats.methods);
+      mergeCounts(uaCatCounts, stats.ua_categories);
+      mergeCounts(pathTypeCounts, stats.path_types);
+      mergeCounts(errorCodeCounts, stats.error_codes);
+      mergeCounts(extRefCounts, stats.ext_ref_domains);
 
       const bKey = gran === 'day' ? (hb - (hb % 86400)) : hb;
       if (!bucketMap[bKey]) {
@@ -629,15 +655,19 @@
 
     // 2. HTTP Methods Chart
     destroyChart('vhMethods');
-    const methods = DATA.methods || [];
+    const methods = useHourly('methods')
+      ? Object.entries(methodCounts)
+        .map(([method, requests]) => ({ method, requests }))
+        .sort((a, b) => b.requests - a.requests)
+      : (DATA.methods || []);
     const ctxMethods = document.getElementById('chart-vh-methods').getContext('2d');
     state.charts.vhMethods = new Chart(ctxMethods, {
       type: 'doughnut',
       data: {
-        labels: methods.map(m => m.method),
+        labels: methods.length ? methods.map(m => m.method) : ['No data'],
         datasets: [{
-          data: methods.map(m => m.requests),
-          backgroundColor: VHOST_PALETTE,
+          data: methods.length ? methods.map(m => m.requests) : [0],
+          backgroundColor: methods.length ? VHOST_PALETTE : ['#334155'],
           borderColor: '#1e293b',
           borderWidth: 2
         }]
@@ -651,15 +681,19 @@
 
     // 3. Client Categories Chart
     destroyChart('vhUaCat');
-    const uaCats = DATA.ua_categories || [];
+    const uaCats = useHourly('ua_categories')
+      ? Object.entries(uaCatCounts)
+        .map(([ua_category, requests]) => ({ ua_category, requests }))
+        .sort((a, b) => b.requests - a.requests)
+      : (DATA.ua_categories || []);
     const ctxUa = document.getElementById('chart-vh-ua-cat').getContext('2d');
     state.charts.vhUaCat = new Chart(ctxUa, {
       type: 'doughnut',
       data: {
-        labels: uaCats.map(u => u.ua_category),
+        labels: uaCats.length ? uaCats.map(u => u.ua_category) : ['No data'],
         datasets: [{
-          data: uaCats.map(u => u.requests),
-          backgroundColor: ['#38bdf8', '#10b981', '#a855f7', '#f59e0b', '#64748b'],
+          data: uaCats.length ? uaCats.map(u => u.requests) : [0],
+          backgroundColor: uaCats.length ? ['#38bdf8', '#10b981', '#a855f7', '#f59e0b', '#64748b'] : ['#334155'],
           borderColor: '#1e293b',
           borderWidth: 2
         }]
@@ -687,7 +721,11 @@
         asset: '#f59e0b',
         file: '#14b8a6'
       };
-      const pathTypes = DATA.path_types || [];
+      const pathTypes = useHourly('path_types')
+        ? Object.entries(pathTypeCounts)
+          .map(([path_type, requests]) => ({ path_type, requests }))
+          .sort((a, b) => b.requests - a.requests)
+        : (DATA.path_types || []);
       const ctxPt = ptCanvas.getContext('2d');
       state.charts.vhPathTypes = new Chart(ctxPt, {
         type: 'doughnut',
@@ -710,7 +748,11 @@
 
     // 5. Error Status Codes Chart
     destroyChart('vhErrorCodes');
-    const errCodes = DATA.error_codes || [];
+    const errCodes = useHourly('error_codes')
+      ? Object.entries(errorCodeCounts)
+        .map(([status, requests]) => ({ status: Number(status), requests }))
+        .sort((a, b) => a.status - b.status)
+      : (DATA.error_codes || []);
     const ctxErr = document.getElementById('chart-vh-error-codes').getContext('2d');
     state.charts.vhErrorCodes = new Chart(ctxErr, {
       type: 'bar',
@@ -737,7 +779,13 @@
     destroyChart('vhReferrers');
     const refCanvas = document.getElementById('chart-vh-referrers');
     if (refCanvas) {
-      const topDomains = (DATA.ext_ref_domains || []).filter(d => (d.human_ok_requests || 0) > 0).slice(0, 25);
+      const topDomains = useHourly('ext_ref_domains')
+        ? Object.entries(extRefCounts)
+          .filter(([, count]) => count > 0)
+          .map(([domain, human_ok_requests]) => ({ domain, human_ok_requests }))
+          .sort((a, b) => b.human_ok_requests - a.human_ok_requests)
+          .slice(0, 25)
+        : (DATA.ext_ref_domains || []).filter(d => (d.human_ok_requests || 0) > 0).slice(0, 25);
       const refContainer = refCanvas.parentElement;
       if (refContainer) {
         refContainer.classList.remove('chart-md', 'chart-xl', 'chart-xxl');

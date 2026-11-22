@@ -356,6 +356,10 @@ sub _process_handle {
 
         # 2. Endpoint & resource-type rollups
         my $ptype  = $row->{path_type} || ApacheLog::Parser::classify_path_type( $row->{path} );
+        $h->{methods}{ $row->{method} }++;
+        $h->{ua_categories}{ $row->{ua_category} }++;
+        $h->{path_types}{$ptype}++;
+        $h->{error_codes}{$status}++ if $status >= 400;
         my $ep_key = "$row->{method} $row->{path}";
         my $ep = ( $vh->{endpoints}{$ep_key} ||= {
             method    => $row->{method},
@@ -422,6 +426,7 @@ sub _process_handle {
                     $d_rec->{human_ok_requests}++   if $is_human_ok;
                     $d_rec->{bot_or_err_requests}++ if ! $is_human_ok;
                     $d_rec->{last_seen} = $row->{timestamp} if $row->{timestamp} > $d_rec->{last_seen};
+                    $h->{ext_ref_domains}{$dom}++ if $is_human_ok;
 
                     my $u_rec = $vh->{ext_ref_urls}{$url} ||= {
                         url                 => $url,
